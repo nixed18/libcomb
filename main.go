@@ -15,7 +15,9 @@ func main() {
 	ProcessCommits()
 
 	LoadWalletKey(myKey)
-	fmt.Printf("myKey %d\n", GetAddressBalance(myKey.public))
+	fmt.Printf("\tmyKey\t\t%d\n", GetAddressBalance(myKey.public))
+	fmt.Printf("\tmyOtherKey\t%d\n", GetAddressBalance(myOtherKey.public))
+	fmt.Printf("\tyourKey\t\t%d\n",GetAddressBalance(yourKey.public))
 
 	//Now lets transfer 1 COMB to yourkey
 
@@ -36,9 +38,9 @@ func main() {
 	//Load Structures
 	LoadStack(s)
 	LoadTransaction(tx, signature)
-	fmt.Printf("Transaction Loaded!\n")
 
 	//Commit the signature
+	fmt.Printf("Committing Siganture...\n")
 	c.tag.height = 2
 	for i, leg := range signature {
 		c.commit = CommitAddress(leg)
@@ -47,6 +49,29 @@ func main() {
 	}
 	ProcessCommits()
 
-	fmt.Printf("myOtherKey %d\n", GetAddressBalance(myOtherKey.public))
-	fmt.Printf("yourKey %d\n",GetAddressBalance(yourKey.public))
+	fmt.Printf("\tmyKey\t\t%d\n", GetAddressBalance(myKey.public))
+	fmt.Printf("\tmyOtherKey\t%d\n", GetAddressBalance(myOtherKey.public))
+	fmt.Printf("\tyourKey\t\t%d\n",GetAddressBalance(yourKey.public))
+
+	//Rollback the first signature commit
+	c.commit = CommitAddress(signature[0])
+	c.tag.txnum = 1
+	c.tag.direction = true
+
+	fmt.Printf("Rolling back Siganture...\n")
+	LoadCommit(c)
+	ProcessCommits()
+
+	fmt.Printf("\tmyKey\t\t%d\n", GetAddressBalance(myKey.public))
+	fmt.Printf("\tmyOtherKey\t%d\n", GetAddressBalance(myOtherKey.public))
+	fmt.Printf("\tyourKey\t\t%d\n",GetAddressBalance(yourKey.public))
+
+	fmt.Printf("Whoops lets add commit back...\n")
+	c.tag.direction = false
+	LoadCommit(c)
+	ProcessCommits()
+
+	fmt.Printf("\tmyKey\t\t%d\n", GetAddressBalance(myKey.public))
+	fmt.Printf("\tmyOtherKey\t%d\n", GetAddressBalance(myOtherKey.public))
+	fmt.Printf("\tyourKey\t\t%d\n",GetAddressBalance(yourKey.public))
 }

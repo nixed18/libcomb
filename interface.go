@@ -63,15 +63,11 @@ func GetStackAddress(s Stack) [32]byte {
 }
 
 func LoadCommit(commit Commit) {
-	miner_mine_commit_internal(commit.commit, commit.tag)
+	miner_add_commit(commit.commit, commit.tag)
 }
 
 func ProcessCommits() {
-	var c Commit
-	c.tag.height = 99999999
-	c.tag.txnum = 9999
-	c.tag.outnum = 9999
-	miner_mine_commit_internal(c.commit, c.tag)
+	miner_process()
 }
 
 func BatchLoadCommit(commits []Commit) {
