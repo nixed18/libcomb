@@ -1,8 +1,7 @@
 package main
 
 import (
-	"crypto/sha256"
-)
+	)
 
 func stack_encode(destination, change [32]byte, sum uint64) (raw [72]byte) {
 	var sum_bytes [8]byte = uint64_to_bytes(sum)
@@ -14,13 +13,13 @@ func stack_encode(destination, change [32]byte, sum uint64) (raw [72]byte) {
 
 func stack_address(destination, change [32]byte, sum uint64) [32]byte {
 	var rawdata = stack_encode(destination, change, sum)
-	var hash = sha256.Sum256(rawdata[0:])
+	var hash = hash256(rawdata[0:])
 	return hash
 }
 
 func stack_load_data(destination, change [32]byte, sum uint64) {
 	var rawdata = stack_encode(destination, change, sum)
-	var hash = sha256.Sum256(rawdata[0:])
+	var hash = hash256(rawdata[0:])
 	var maybecoinbase = commit(hash[0:])
 
 	segments_stack_mutex.Lock()

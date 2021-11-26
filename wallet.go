@@ -2,8 +2,7 @@ package main
 
 import (
 	"crypto/rand"
-	"crypto/sha256"
-	"sync"
+		"sync"
 )
 
 var wallet_mutex sync.RWMutex
@@ -21,14 +20,13 @@ func wallet_compute_public_key(key [21][32]byte) (pub [32]byte) {
 	var buf [672]byte
 	var sli []byte
 	sli = buf[0:0]
-	for i := range key {
-		tip[i] = key[i]
-		for j := 0; j < 59213; j++ {
-			tip[i] = sha256.Sum256(tip[i][:])
-		}
+
+	tip = hash_chains_fixed(key, 59213)
+	for i := range tip {
 		sli = append(sli, tip[i][:]...)
 	}
-	pub = sha256.Sum256(sli)
+
+	pub = hash256(sli)
 	return pub
 }
 
@@ -83,14 +81,13 @@ func wallet_sign_transaction(source [32]byte, destination [32]byte) (signature [
 	slice = append(slice, source[0:]...)
 	slice = append(slice, destination[0:]...)
 
-	var id = sha256.Sum256(slice)
+	var id = hash256(slice)
 	depths := CutCombWhere(id[0:])
-
 	for i := range depths {
-		for j := uint16(0); j < uint16(LEVELS)-uint16(depths[i]); j++ {
-			key[i] = sha256.Sum256(key[i][0:])
-		}
-		signature[i] = key[i]//commit(key[i][0:])
+		depths[i] = uint16(LEVELS)-uint16(depths[i])
 	}
+
+	signature = hash_chains(key, depths)
+
 	return signature
 }

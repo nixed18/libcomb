@@ -1,8 +1,7 @@
 package main
 
 import (
-	"crypto/sha256"
-)
+	)
 
 func transaction_raw_data(source, destination [32]byte) (raw [64]byte) {
 	copy(raw[0:], source[0:])
@@ -14,7 +13,7 @@ func transaction_load(source, destination [32]byte, signature [21][32]byte) {
 	var txcommitsandfrom [22][32]byte
 	var txidandto [2][32]byte
 	var txraw = transaction_raw_data(source, destination)
-	var txid = sha256.Sum256(txraw[:])
+	var txid = hash256(txraw[:])
 
 	//create our data structures
 	for j := 0; j < 21; j++ {
@@ -27,22 +26,15 @@ func transaction_load(source, destination [32]byte, signature [21][32]byte) {
 
 	//verify signature
 	var teeth_lengths = CutCombWhere(txid[0:])
-    var teeth_tips [21][32]byte
+	var data [672]byte
 
-	var hash = sha256.New()
-	for i := 0; i < 21; i++ {
-		var hashchain = signature[i]
-		for j := uint16(0); j < teeth_lengths[i]; j++ {
-			hashchain = sha256.Sum256(hashchain[0:])
-		}
-		hash.Write(hashchain[:])
-		teeth_tips[i] = hashchain
-
+	var tip = hash_chains(signature, teeth_lengths)
+	for i := range tip {
+		copy(data[i*32:i*32+32], tip[i][0:])
 	}
-	var actuallyfrom [32]byte
-	copy(actuallyfrom[:], hash.Sum(nil))
 
-	logf("%X %X\n", hash.Sum(nil), source)
+	var actuallyfrom = hash256(data[:])
+	
 	if actuallyfrom != source {
 		log("error signature invalid")
 		return
@@ -74,6 +66,8 @@ func transaction_load(source, destination [32]byte, signature [21][32]byte) {
 	//check if transaction is valid (commited + not a double spend), and trickle/untrickle accordingly
 	var oldactivity = tx_legs_activity[txid]
 	var newactivity = tx_scan_leg_activity(txid)
+
+	logf("old %021b\nnew %021b\n", oldactivity, newactivity)
 	tx_legs_activity[txid] = newactivity
 	if oldactivity != newactivity {
 		//there is an older transaction thats valid
@@ -91,7 +85,6 @@ func transaction_load(source, destination [32]byte, signature [21][32]byte) {
 			segments_transaction_trickle(make(map[[32]byte]struct{}), source)
 		}
 	}
-
 	segments_merkle_mutex.Unlock()
 	segments_transaction_mutex.Unlock()
 	txleg_mutex.Unlock()

@@ -1,8 +1,7 @@
 package main
 
 import (
-	"crypto/sha256"
-	"sync"
+		"sync"
 )
 
 var commits_mutex sync.RWMutex
@@ -62,45 +61,37 @@ func miner_process_new() {
 		txleg_mutex.RLock()
 
 		txlegs_each_leg_target(key, func(tx *[32]byte) bool {
-
 			var oldactivity = tx_legs_activity[*tx]
 			var newactivity = oldactivity
-		outer:
-			for i := uint(0); i < 21; i++ {
+            var tags [21]utxotag
+			var iterations [21]uint16
+			var input [21][32]byte
+			for i := 0; i < 21; i++ { 
+				input[i] = segments_transaction_data[*tx][i]
+				ok := (key == commit(input[i][:]))
+
+				if !ok {
+					iterations[i] = 0
+				} else {
+					iterations[i] = 65535
+					tags[i] = tagval
+				}
+			}
+			
+			var activities = hash_chains_compare(input, iterations, tags)
+
+			for i := 0; i < 21; i++ { 
 				if oldactivity&(1<<i) != 0 {
 					continue
 				}
-				var roottag = tagval
-
-				segments_transaction_mutex.RLock()
-
-				var val = segments_transaction_data[*tx][i]
-
-				segments_transaction_mutex.RUnlock()
-
-				if key == commit(val[0:]) {
-
-					var hash = val
-
-					for j := 0; j < 65536; j++ {
-						hash = sha256.Sum256(hash[0:])
-
-						var candidaterawtag, ok3 = commits[commit(hash[0:])]
-
-						if !ok3 {
-							continue
-						}
-						var candidatetag = candidaterawtag
-
-						if utag_cmp(&roottag, &candidatetag) >= 0 {
-
-							continue outer
-						}
+				if key == commit(input[i][0:]) {
+					if !activities[i] {
+						newactivity |= (1 << i)
 					}
-					newactivity |= (1 << i)
 				}
 			}
 
+			logf("old %021b\nnew %021b\n", oldactivity, newactivity)
 			if oldactivity != newactivity {
 				tx_legs_activity[*tx] = newactivity
 				if newactivity == 2097151 {

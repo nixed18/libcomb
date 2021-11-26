@@ -2,7 +2,7 @@ package main
 
 import "fmt"
 
-var logging_enabled = false
+var logging_enabled = true
 
 func logf(f string, a ...interface{}) {
 	if logging_enabled {

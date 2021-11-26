@@ -1,8 +1,7 @@
 package main
 
 import (
-	"crypto/sha256"
-)
+	)
 
 
 func merkle_construct_internal(addr0, addr1, addr2, secret0, secret1, chaining [32]byte, siggy uint16) {
@@ -35,20 +34,12 @@ func merkle_construct_internal(addr0, addr1, addr2, secret0, secret1, chaining [
 	chainz[0] = secret0
 	chainz[1] = secret1
 
-	for i := 0; i < 65535-sig; i++ {
-		chainz[0] = sha256.Sum256(chainz[0][0:])
-	}
-	for i := 0; i < sig; i++ {
-		chainz[1] = sha256.Sum256(chainz[1][0:])
-	}
+	chainz[0] = hash_chain(chainz[0], uint16(65535-sig))
+	chainz[1] = hash_chain(chainz[1], uint16(sig))
 	chtipz = chainz
 
-	for i := 0; i < sig; i++ {
-		chtipz[0] = sha256.Sum256(chtipz[0][0:])
-	}
-	for i := 0; i < 65535-sig; i++ {
-		chtipz[1] = sha256.Sum256(chtipz[1][0:])
-	}
+	chtipz[0] = hash_chain(chtipz[0], uint16(sig))
+	chtipz[1] = hash_chain(chtipz[0], uint16(65535-sig))
 
 	logf("commit0=%X\n", commit(chainz[0][0:]))
 	logf("commit1=%X\n", commit(chainz[1][0:]))
@@ -58,7 +49,7 @@ func merkle_construct_internal(addr0, addr1, addr2, secret0, secret1, chaining [
 	copy(a0buf[32:64], chtipz[0][0:])
 	copy(a0buf[64:96], chtipz[1][0:])
 
-	var a0 = sha256.Sum256(a0buf[0:])
+	var a0 = hash256(a0buf[0:])
 	var e0 = merkle(a0[0:], b0[0:])
 
 	logf("nextchainer=%X\n", a0)
@@ -174,7 +165,7 @@ outer:
 		var hash = data[i]
 
 		for ; j < sigvariability; j++ {
-			hash = sha256.Sum256(hash[0:])
+			hash = hash256(hash[0:])
 			if hash == data[i+2] {
 				j++
 				break
@@ -220,16 +211,15 @@ func notify_transaction(a1, a0, u1, u2, q1, q2 [32]byte, z [16][32]byte, b1 [32]
 			break
 		}
 
-		hash = sha256.Sum256(hash[0:])
+		hash = hash256(hash[0:])
 	}
 	if hash != u1 {
 		logf("error merkle solution sig hash 1 does not match")
 		return false, [32]byte{}
 	}
-	hash = q2
-	for i := 0; i < 65535-sig; i++ {
-		hash = sha256.Sum256(hash[0:])
-	}
+	
+	hash = hash_chain(q2, uint16(65535-sig))
+
 	if hash != u2 {
 		logf("error merkle solution sig hash 2 does not match")
 		return false, [32]byte{}
@@ -343,7 +333,7 @@ func merkle_load_data_internal(rawdata [704]byte) {
 	copy(buf3_a0[32:64], arraydata[MERKLE_DATA_U1][0:32])
 	copy(buf3_a0[64:96], arraydata[MERKLE_DATA_U2][0:32])
 
-	var a0 = sha256.Sum256(buf3_a0[0:])
+	var a0 = hash256(buf3_a0[0:])
 
 	//logf("a0=%X\n", a0)
 
