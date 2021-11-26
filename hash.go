@@ -60,7 +60,7 @@ func hash_chain_compare(in [32]byte, iterations uint16, tag utxotag) bool {
 		hash = sha256.Sum256(buf[32:])
 		copy(buf[32:], hash[:])
 		var candidate, ok = commits[sha256.Sum256(buf[:])]
-		//hash_count+=2
+		chain_hash_count+=2
 		if !ok {
 			continue
 		}
@@ -80,8 +80,6 @@ func hash_chain(in [32]byte, iterations uint16) [32]byte {
 }
 
 func hash256(in []byte) [32]byte {
-	//processing keys or transactions can easily result in hashing millions of times
-	//should be faster on CPU's with SIMD or dedicated SHA instructions
 	hash_count++
 	return sha256.Sum256(in)
 }
