@@ -161,7 +161,7 @@ func balance_check2(from [32]byte, to [32]byte, to2 [32]byte) balance {
 	balance_mutex.RUnlock()
 
 	if various_debug_prints_and_self_checking {
-		logf("%X ~~ %X %X % 21d\n", from, to, to2, bal, bal2)
+		logf("%X ~~ %X %X %21d\n", from, to, to2, bal)
 	}
 
 	return bal + bal2

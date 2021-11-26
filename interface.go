@@ -1,7 +1,5 @@
 package main
 
-var initial_writeback_over = true
-
 type WalletKey struct {
 	public  [32]byte
 	private [21][32]byte
@@ -63,6 +61,12 @@ func GetStackAddress(s Stack) [32]byte {
 }
 
 func LoadCommit(commit Commit) {
+	commit.tag.direction = false //mine
+	miner_add_commit(commit.commit, commit.tag)
+}
+
+func UnloadCommit(commit Commit) {
+	commit.tag.direction = true //unmine
 	miner_add_commit(commit.commit, commit.tag)
 }
 

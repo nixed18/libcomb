@@ -1,8 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+)
 
 func main() {
-	fmt.Println("TEST MINING, ROLLBACKS ETC")
-	miner_test()
+	fmt.Println("PLEASE RUN TESTS")
 }
