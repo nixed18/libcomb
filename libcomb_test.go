@@ -14,7 +14,7 @@ func TestMiner(t *testing.T) {
 	c.commit = CommitAddress(myKey.public) //Might want to use steath address's
 	c.tag.height = 1 //First block
 	LoadCommit(c)
-	ProcessCommits()
+	FinishBlock()
 
 	LoadWalletKey(myKey)
 	logf("\tmyKey\t\t%d\n", GetAddressBalance(myKey.public))
@@ -50,10 +50,10 @@ func TestMiner(t *testing.T) {
 	c.tag.height = 2
 	for i, leg := range signature {
 		c.commit = CommitAddress(leg)
-		c.tag.txnum = uint16(i+1)
+		c.tag.commitnum = uint16(i)
 		LoadCommit(c)
 	}
-	ProcessCommits()
+	FinishBlock()
 
 	logf("\tmyKey\t\t%d\n", GetAddressBalance(myKey.public))
 	logf("\tmyOtherKey\t%d\n", GetAddressBalance(myOtherKey.public))
@@ -65,11 +65,11 @@ func TestMiner(t *testing.T) {
 
 	//Rollback the first signature commit
 	c.commit = CommitAddress(signature[0])
-	c.tag.txnum = 1
+	c.tag.commitnum = 0
 
 	logf("Rolling back Signature...\n")
 	UnloadCommit(c)
-	ProcessCommits()
+	FinishBlock()
 
 	logf("\tmyKey\t\t%d\n", GetAddressBalance(myKey.public))
 	logf("\tmyOtherKey\t%d\n", GetAddressBalance(myOtherKey.public))
@@ -82,7 +82,7 @@ func TestMiner(t *testing.T) {
 	logf("Whoops lets add that commit back...\n")
 	c.tag.direction = false
 	LoadCommit(c)
-	ProcessCommits()
+	FinishBlock()
 
 	logf("\tmyKey\t\t%d\n", GetAddressBalance(myKey.public))
 	logf("\tmyOtherKey\t%d\n", GetAddressBalance(myOtherKey.public))

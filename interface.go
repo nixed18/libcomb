@@ -61,24 +61,22 @@ func GetStackAddress(s Stack) [32]byte {
 }
 
 func LoadCommit(commit Commit) {
-	commit.tag.direction = false //mine
-	miner_add_commit(commit.commit, commit.tag)
+	miner_mine_commit(commit.commit, commit.tag)
 }
 
 func UnloadCommit(commit Commit) {
-	commit.tag.direction = true //unmine
-	miner_add_commit(commit.commit, commit.tag)
+	miner_unmine_commit(commit.commit, commit.tag)
 }
 
-func ProcessCommits() {
-	miner_process()
+func FinishBlock() {
+	miner_finish_block()
 }
 
-func BatchLoadCommit(commits []Commit) {
+func BlockLoadCommits(commits []Commit) {
 	for _, c := range commits {
 		LoadCommit(c)
 	}
-	ProcessCommits()
+	FinishBlock()
 }
 
 func CommitAddress(a [32]byte) [32]byte {
