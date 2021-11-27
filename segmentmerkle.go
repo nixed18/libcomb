@@ -9,19 +9,19 @@ var segments_merkle_uncommit map[[32]byte][32]byte //commit(address) -> address
 var segments_merkle_lever map[[32]byte][32]byte //hash(address, signature) -> destination
 var segments_merkle_blackheart map[[32]byte][4][32]byte //heart -> long + short
 var segments_merkle_whiteheart map[[32]byte][4][32]byte //heart -> long + short (final segment in tree)
-var epsilonzeroes map[[32]byte][32]byte //commit(signature) -> address
+var segments_merkle_target map[[32]byte][32]byte //commit(signature) -> address
 var segments_merkle_activity map[[32]byte]byte //heart -> activity (last seen activity)
-var e0_to_e1 map[[32]byte][32]byte //address -> destination
+var segments_merkle_next map[[32]byte][32]byte //address -> destination
 
 func segmentmerkle_reset() {
 	segments_merkle_mutex.Lock()
 	segments_merkle_uncommit = make(map[[32]byte][32]byte)
-	epsilonzeroes = make(map[[32]byte][32]byte)
+	segments_merkle_target = make(map[[32]byte][32]byte)
 	segments_merkle_blackheart = make(map[[32]byte][4][32]byte)
 	segments_merkle_whiteheart = make(map[[32]byte][4][32]byte)
 	segments_merkle_lever = make(map[[32]byte][32]byte)
 	segments_merkle_activity = make(map[[32]byte]byte)
-	e0_to_e1 = make(map[[32]byte][32]byte)
+	segments_merkle_next = make(map[[32]byte][32]byte)
 	segments_merkle_mutex.Unlock()
 }
 
@@ -45,7 +45,7 @@ func segments_merkle_trickle(loopkiller map[[32]byte]struct{}, commitment [32]by
 	loopkiller[commitment] = struct{}{}
 
 	segments_merkle_mutex.RLock()
-	var txidandto, ok = e0_to_e1[commitment]
+	var txidandto, ok = segments_merkle_next[commitment]
 	segments_merkle_mutex.RUnlock()
 	var to = txidandto
 
@@ -79,7 +79,7 @@ func segments_merkle_untrickle(loopkiller *[32]byte, commitment [32]byte, bal ba
 
 func segments_merkle_type(commit [32]byte) segment_type {
 	segments_merkle_mutex.RLock()
-	_, ok1 := e0_to_e1[commit]
+	_, ok1 := segments_merkle_next[commit]
 	segments_merkle_mutex.RUnlock()
 
 	if ok1 {
@@ -96,7 +96,7 @@ func segments_merkle_loopdetect(norecursion, loopkiller map[[32]byte]struct{}, c
 	}
 	loopkiller[commitment] = struct{}{}
 	segments_merkle_mutex.RLock()
-	var txidandto, ok = e0_to_e1[commitment]
+	var txidandto, ok = segments_merkle_next[commitment]
 	segments_merkle_mutex.RUnlock()
 	var to = txidandto
 
@@ -136,7 +136,7 @@ func segments_merkle_backgraph(backgraph map[[32]byte][][32]byte, norecursion ma
 	norecursion[commitment] = struct{}{}
 
 	segments_merkle_mutex.RLock()
-	var txidandto, ok = e0_to_e1[commitment]
+	var txidandto, ok = segments_merkle_next[commitment]
 	segments_merkle_mutex.RUnlock()
 	var to = txidandto
 

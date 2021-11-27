@@ -3,7 +3,7 @@ package main
 func merkle_mine(c [32]byte) {
 	segments_merkle_mutex.Lock()
 
-	merkledata_each_epsilonzeroes(c, func(e0 *[32]byte) bool {
+	merkledata_each_segments_merkle_target(c, func(e0 *[32]byte) bool {
 		var e [2][32]byte
 		e[0] = *e0
 
@@ -28,11 +28,11 @@ func merkle_mine(c [32]byte) {
 
 func merkle_unmine(c [32]byte) {
 	segments_merkle_mutex.Lock()
-	merkledata_each_epsilonzeroes(c, func(e0 *[32]byte) bool {
+	merkledata_each_segments_merkle_target(c, func(e0 *[32]byte) bool {
 
 		var e [2][32]byte
 		e[0] = *e0
-		e[1] = e0_to_e1[e[0]]
+		e[1] = segments_merkle_next[e[0]]
 		var tx = merkle(e[0][0:], e[1][0:])
 
 		//logf("unmine tx=%X\n", tx)
@@ -159,8 +159,8 @@ func notify_transaction(next, short_decider, left_tip, right_tip, left_sig, righ
 	var right_commit = commit(right_sig[0:])
 	segments_merkle_mutex.Lock()
 	segments_merkle_uncommit[commit(address[0:])] = address
-	merkledata_store_epsilonzeroes(left_commit, address)
-	merkledata_store_epsilonzeroes(right_commit, address)
+	merkledata_store_segments_merkle_target(left_commit, address)
+	merkledata_store_segments_merkle_target(right_commit, address)
 
 
 	//for multi-level trees the destination is another segment, otherwise the leaf
@@ -211,17 +211,17 @@ func reactivate(tx [32]byte, e [2][32]byte) {
 			//segments_coinbase_untrickle_auto(maybecoinbase, e[0])
 
 			segments_merkle_mutex.Lock()
-			delete(e0_to_e1, e[0])
+			delete(segments_merkle_next, e[0])
 			segments_merkle_mutex.Unlock()
 		}
 		if newactivity == 3 {
 			segments_merkle_mutex.Lock()
-			if _, ok1 := e0_to_e1[e[0]]; ok1 {
+			if _, ok1 := segments_merkle_next[e[0]]; ok1 {
 				log("Panic: e0 to e1 already have live path")
 				panic("")
 			}
 
-			e0_to_e1[e[0]] = e[1]
+			segments_merkle_next[e[0]] = e[1]
 			segments_merkle_mutex.Unlock()
 			var maybecoinbase = commit(e[0][0:])
 			if _, ok1 := combbases[maybecoinbase]; ok1 {
@@ -233,12 +233,12 @@ func reactivate(tx [32]byte, e [2][32]byte) {
 	}
 }
 
-func merkledata_each_epsilonzeroes(source [32]byte, eacher func(*[32]byte) bool) {
+func merkledata_each_segments_merkle_target(source [32]byte, eacher func(*[32]byte) bool) {
 	var iter = source
 
 	for {
 		hash_seq_next(&iter)
-		var maybedata, ok = epsilonzeroes[iter]
+		var maybedata, ok = segments_merkle_target[iter]
 
 		if !ok {
 			return

@@ -181,16 +181,16 @@ func txdoublespends_each_doublespend_target(source [32]byte, eacher func(*[2][32
 	}
 }
 
-func merkledata_store_epsilonzeroes(source [32]byte, to [32]byte) bool {
+func merkledata_store_segments_merkle_target(source [32]byte, to [32]byte) bool {
 	var iter = source
 
 	for {
 		hash_seq_next(&iter)
 
-		var maybedata, ok = epsilonzeroes[iter]
+		var maybedata, ok = segments_merkle_target[iter]
 
 		if !ok {
-			epsilonzeroes[iter] = to
+			segments_merkle_target[iter] = to
 			return true
 		}
 		if ok && maybedata == to {
