@@ -15,10 +15,16 @@ type used_key_minimum struct {
 	commit [32]byte
 }
 
-func init() {
+func usedkey_reset() {
+	used_key_mutex.Lock()
 	used_height_commits = make(map[uint64][][32]byte)
 	used_key_min = make(map[[32]byte]used_key_minimum)
 	used_commit_keys = make(map[[32]byte][][32]byte)
+	used_key_mutex.Unlock()
+}
+
+func init() {
+	usedkey_reset()
 }
 
 func used_key_fetch(key [32]byte) (min used_key_minimum, has bool) {

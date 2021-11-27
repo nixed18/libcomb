@@ -67,7 +67,7 @@ func transaction_load(source, destination [32]byte, signature [21][32]byte) {
 	var oldactivity = tx_legs_activity[txid]
 	var newactivity = tx_scan_leg_activity(txid)
 
-	logf("old %021b\nnew %021b\n", oldactivity, newactivity)
+	//logf("old %021b\nnew %021b\n", oldactivity, newactivity)
 	tx_legs_activity[txid] = newactivity
 	if oldactivity != newactivity {
 		//there is an older transaction thats valid

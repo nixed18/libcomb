@@ -6,9 +6,15 @@ var segments_stack_mutex sync.RWMutex
 var segments_stack map[[32]byte][72]byte
 var segments_stack_uncommit map[[32]byte][32]byte
 
-func init() {
+func segmentstack_reset() {
+	segments_stack_mutex.Lock()
 	segments_stack = make(map[[32]byte][72]byte)
 	segments_stack_uncommit = make(map[[32]byte][32]byte)
+	segments_stack_mutex.Unlock()
+}
+
+func init() {
+	segmentstack_reset()
 }
 
 const SEGMENT_STACK_TRICKLED byte = 32

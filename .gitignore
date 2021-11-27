@@ -1,0 +1,4 @@
+libcomb
+libcomb.*
+go.sum
+*.prof

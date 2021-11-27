@@ -5,8 +5,14 @@ import "sync"
 var txleg_mutex sync.RWMutex
 var txleg_to_tx map[[32]byte][32]byte
 
-func init() {
+func txlegs_reset() {
+	txleg_mutex.Lock()
 	txleg_to_tx = make(map[[32]byte][32]byte)
+	txleg_mutex.Unlock()
+}
+
+func init() {
+	txlegs_reset()
 }
 
 func hash_seq_next(h *[32]byte) {

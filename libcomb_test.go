@@ -5,9 +5,10 @@ import (
 )
 
 func TestMiner(t *testing.T) {
-	var myKey WalletKey = CreateWalletKey()
-	var myOtherKey WalletKey = CreateWalletKey()
-	var yourKey WalletKey = CreateWalletKey()
+	ResetCOMB()
+	var myKey WalletKey = GenerateWalletKey()
+	var myOtherKey WalletKey = GenerateWalletKey()
+	var yourKey WalletKey = GenerateWalletKey()
 
 	//Mine some COMB into myKey
 	var c Commit
@@ -93,4 +94,66 @@ func TestMiner(t *testing.T) {
 	if GetAddressBalance(yourKey.public) != 100000000 || GetAddressBalance(myOtherKey.public) != 110000000 {
 		t.Error("redo error")
 	}
+}
+
+func TestMerkle(t *testing.T) {
+	ResetCOMB()
+	var myKey WalletKey = GenerateWalletKey()
+	var myOtherKey WalletKey = GenerateWalletKey()
+	var yourKey WalletKey = GenerateWalletKey()
+	LoadWalletKey(myKey)
+
+	var c Commit
+	c.commit = CommitAddress(myKey.public)
+	c.tag.height = 1
+	LoadCommit(c)
+	FinishBlock()
+
+	logf("\tmyKey\t\t%d\n", GetAddressBalance(myKey.public))
+
+	var myDecider = GenerateDecider()
+	var myShortDecider = ComputeShortDecider(myDecider)
+
+	var contractTree [65536][32]byte
+	//every other address is zero, dont sign the wrong branch :)
+	contractTree[0] = myOtherKey.public
+	contractTree[1] = yourKey.public
+
+	var contract = ConstructContract(contractTree, myShortDecider)
+	var contractAddress = ComputeContractAddress(contract)
+
+	var tx Transaction
+	tx.source = myKey.public
+	tx.destination = contractAddress
+	var signature = SignTransaction(tx)
+
+	LoadTransaction(tx, signature)
+	logf("Committing Tx Signature...\n")
+	c.tag.height = 2
+	for i, leg := range signature {
+		c.commit = CommitAddress(leg)
+		c.tag.commitnum = uint16(i)
+		LoadCommit(c)
+	}
+	FinishBlock()
+
+	logf("\tmyKey\t\t%d\n", GetAddressBalance(myKey.public))
+	logf("\tcontract\t%d\n", GetAddressBalance(contractAddress))
+
+	var myLongDecider = SignDecider(myDecider, 1)
+	var merkleSegment = DecideContract(contract, myLongDecider, contractTree)
+	
+	logf("Committing Long Decider...\n")
+	c.tag.height = 3
+	for i, leg := range myLongDecider.signature {
+		c.commit = CommitAddress(leg)
+		c.tag.commitnum = uint16(i)
+		LoadCommit(c)
+	}
+	FinishBlock()
+	LoadMerkleSegment(merkleSegment)
+
+	logf("\tcontract\t%d\n", GetAddressBalance(contractAddress))
+	logf("\tmyOtherKey\t%d\n", GetAddressBalance(myOtherKey.public))
+	logf("\tyourKey\t\t%d\n", GetAddressBalance(yourKey.public))	
 }

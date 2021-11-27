@@ -17,9 +17,24 @@ var commit_tag_cache []utxotag
 var commit_rollback [][32]byte
 var commit_rollback_tags []utxotag
 
-func init() {
+func mine_reset() {
+	commits_mutex.Lock()
+	commit_cache_mutex.Lock()
+
 	commits = make(map[[32]byte]utxotag)
 	combbases = make(map[[32]byte]struct{})
+	commit_current_height = 0
+	commit_cache = nil
+	commit_tag_cache = nil
+	commit_rollback = nil
+	commit_rollback_tags = nil
+
+	commit_cache_mutex.Unlock()
+	commits_mutex.Unlock()
+}
+
+func init() {
+	mine_reset()
 }
 
 func height_view() (h uint32) {
@@ -289,7 +304,7 @@ func miner_mine_commit(rawcommit [32]byte, tag utxotag) {
 
 	is_first = len(commit_cache)+len(commit_rollback) == 0
 
-	//cant mine a commit thats not in this block
+	//can only mine a commit thats higher than the current block
 	if is_first && commit_current_height >= tag.height {
 		commit_cache_mutex.Unlock()
 		logf("error: mined first commitment must be on greater height\n")

@@ -18,7 +18,7 @@ func combs(b balance) uint32 {
 	return uint32(b / 100000000)
 }
 
-func init() {
+func balance_reset() {
 	balance_mutex.Lock()
 
 	balance_edge = make(map[[32]byte]balance)
@@ -26,6 +26,10 @@ func init() {
 	balance_loop = make(map[[32]byte]balance)
 
 	balance_mutex.Unlock()
+}
+
+func init() {
+	balance_reset()
 }
 
 func balance_try_increase_loop(where_node [32]byte) bool {

@@ -5,8 +5,12 @@ import (
 
 var tx_legs_activity map[[32]byte]uint32
 
-func init() {
+func txresv_reset() {
 	tx_legs_activity = make(map[[32]byte]uint32)
+}
+
+func init() {
+	txresv_reset()
 }
 
 func tx_scan_leg_activity(tx [32]byte) (activity uint32) {

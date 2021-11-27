@@ -2,7 +2,7 @@ package main
 
 import (
 	"crypto/rand"
-		"sync"
+	"sync"
 )
 
 var wallet_mutex sync.RWMutex
@@ -10,9 +10,16 @@ var wallet map[[32]byte][21][32]byte
 var wallet_commitments map[[32]byte][32]byte
 var wallet_saved int
 
-func init() {
+func wallet_reset() {
+	wallet_mutex.Lock()
 	wallet = make(map[[32]byte][21][32]byte)
 	wallet_commitments = make(map[[32]byte][32]byte)
+	wallet_saved = 0
+	wallet_mutex.Unlock()
+}
+
+func init() {
+	wallet_reset()
 }
 
 func wallet_compute_public_key(key [21][32]byte) (pub [32]byte) {

@@ -22,13 +22,39 @@ type Commit struct {
 	tag		utxotag
 }
 
+type Decider struct {
+	private [2][32]byte
+}
+
+type ShortDecider struct {
+	public [2][32]byte
+}
+
+type LongDecider struct {
+	signature [2][32]byte
+}
+
+type MerkleSegment struct {
+	short [2][32]byte
+	long [2][32]byte
+	branches [16][32]byte
+	leaf [32]byte
+	next [32]byte
+}
+
+type Contract struct {
+	short [2][32]byte
+	next [32]byte
+	root [32]byte
+}
+
 func ComputeWalletKey(key [21][32]byte) (w WalletKey) {
 	w.private = key
 	w.public = wallet_compute_public_key(key)
 	return w
 }
 
-func CreateWalletKey() (w WalletKey) {
+func GenerateWalletKey() (w WalletKey) {
 	w.public, w.private = wallet_generate_key()
 	return w
 }
@@ -81,4 +107,55 @@ func BlockLoadCommits(commits []Commit) {
 
 func CommitAddress(a [32]byte) [32]byte {
 	return commit(a[:])
+}
+
+func GenerateDecider() (d Decider) {
+	d.private = purse_generate_decider()
+	return d
+}
+
+func ComputeShortDecider(d Decider) (s ShortDecider) {
+	s.public = purse_compute_short_decider(d.private)
+	return s
+}
+
+func SignDecider(d Decider, number uint16) (l LongDecider) {
+	l.signature = purse_sign_decider(d.private, number)
+	return l
+}
+
+func ConstructContract(tree [65536][32]byte, s ShortDecider) (c Contract) {
+	c.short = s.public
+	c.root = merkle_compute_root(tree)
+	return c
+}
+
+func ComputeContractAddress(c Contract) (contract_address [32]byte) {
+	var short_address [32]byte = purse_compute_short_address(c.short, c.next)
+	contract_address = contract_compute_address(short_address, c.root)
+	return contract_address
+}
+
+func DecideContract(c Contract, l LongDecider, tree [65536][32]byte) (m MerkleSegment) {
+	var number uint16
+	var ok bool
+	if number, ok = purse_recover_signed_number(c.short, l.signature); !ok {
+		log("error long decider does not decide this contract")
+		return m
+	}
+
+	m.short = c.short
+	m.next = c.next
+	m.long = l.signature
+	_, m.branches, m.leaf = merkle_traverse_tree(tree, number)
+	return m
+}
+
+func LoadMerkleSegment(m MerkleSegment) {
+	var short_address [32]byte = purse_compute_short_address(m.short, m.next)
+	notify_transaction(m.next, short_address, m.short[0], m.short[1], m.long[0], m.long[1], m.branches, m.leaf)
+}
+
+func ResetCOMB() {
+	reset_all()
 }

@@ -4,6 +4,10 @@ const reset_whole_graph_on_reorg bool = true
 
 var graph_dirty bool
 
+func resetgraph_reset() {
+	graph_dirty = false
+}
+
 func resetgraph() {
 
 	if !graph_dirty {

@@ -10,3 +10,19 @@ const sign_debug bool = false
 const commitment_mining_selfprinting bool = false
 const wallet_selfmining_links bool = false
 const various_debug_prints_and_self_checking bool = false
+
+
+func reset_all() {
+	//should reset all state... hopefully
+	balance_reset()
+	hash_reset()
+	mine_reset()
+	segmentmerkle_reset()
+	segmentstack_reset()
+	segmenttx_reset()
+	txlegs_reset()
+	txresv_reset()
+	usedkey_reset()
+	wallet_reset()
+	resetgraph_reset()
+}

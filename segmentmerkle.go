@@ -11,7 +11,6 @@ var segments_merkle_whiteheart map[[32]byte][4][32]byte
 var epsilonzeroes map[[32]byte][32]byte
 var segments_merkle_activity map[[32]byte]byte
 var e0_to_e1 map[[32]byte][32]byte
-var segmets_merkle_userinput map[[22][32]byte][32]byte
 
 const sigvariability = 65536
 
@@ -41,7 +40,9 @@ const MERKLE_DIAMOND_A0 = 0
 const MERKLE_DIAMOND_B0 = 1
 const MERKLE_DIAMOND_A1 = 2
 
-func init() {
+func segmentmerkle_reset() {
+	
+	segments_merkle_mutex.Lock()
 	segments_merkle_uncommit = make(map[[32]byte][32]byte)
 	epsilonzeroes = make(map[[32]byte][32]byte)
 	segments_merkle_blackheart = make(map[[32]byte][4][32]byte)
@@ -49,13 +50,17 @@ func init() {
 	segments_merkle_lever = make(map[[32]byte][32]byte)
 	segments_merkle_activity = make(map[[32]byte]byte)
 	e0_to_e1 = make(map[[32]byte][32]byte)
-	segmets_merkle_userinput = make(map[[22][32]byte][32]byte)
+	segments_merkle_mutex.Unlock()
+}
+
+func init() {
+	segmentmerkle_reset()
 }
 
 const SEGMENT_MERKLE_TRICKLED byte = 16
 
 func segments_merkle_trickle(loopkiller map[[32]byte]struct{}, commitment [32]byte) {
-
+	
 	if balance_try_increase_loop(commitment) {
 		return
 	}

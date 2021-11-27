@@ -9,11 +9,17 @@ var segments_transaction_data map[[32]byte][22][32]byte
 var segments_transaction_next map[[32]byte][2][32]byte
 var segments_transaction_doublespends map[[32]byte][2][32]byte
 
-func init() {
+func segmenttx_reset() {
+	segments_transaction_mutex.Lock()
 	segments_transaction_uncommit = make(map[[32]byte][32]byte)
 	segments_transaction_data = make(map[[32]byte][22][32]byte)
 	segments_transaction_next = make(map[[32]byte][2][32]byte)
 	segments_transaction_doublespends = make(map[[32]byte][2][32]byte)
+	segments_transaction_mutex.Unlock()
+}
+
+func init() {
+	segmenttx_reset()
 }
 
 const SEGMENT_TX_TRICKLED byte = 4

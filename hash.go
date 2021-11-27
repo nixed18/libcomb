@@ -8,6 +8,11 @@ import (
 var hash_count uint64 //single threaded hashing (try to minimize)
 var chain_hash_count uint64 //optimized threaded hashing
 
+func hash_reset() {
+	hash_count = 0
+	chain_hash_count = 0
+}
+
 /*
 extracted from the rest of libcomb for optimization
 sha256-simd should be faster on CPU's with SIMD or dedicated SHA instructions
