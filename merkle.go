@@ -195,90 +195,93 @@ outer:
 	return activity
 }
 
-func notify_transaction(a1, a0, u1, u2, q1, q2 [32]byte, z [16][32]byte, b1 [32]byte) (bool, [32]byte) {
+func notify_transaction(next, short_decider, left_tip, right_tip, left_sig, right_sig [32]byte, branches [16][32]byte, leaf [32]byte) (bool, [32]byte) {
+	var address [32]byte
+	var destination [32]byte
 
-	var e [2][32]byte
-
-	var a1_is_zero = a1 == e[0]
+	//are we at the bottom of our tree?
+	var next_is_zero = next == address //zeros
 
 	var sig int
 
-	var hash = q1
-
+	//recover signature from left_sig and left_tip
+	var hash = left_sig
 	for i := 0; i < 65536; i++ {
-		if hash == u1 {
+		if hash == left_tip {
 			sig = i
 			break
 		}
-
 		hash = hash256(hash[0:])
 	}
-	if hash != u1 {
+
+	//no signature was found!
+	if hash != left_tip {
 		logf("error merkle solution sig hash 1 does not match")
 		return false, [32]byte{}
 	}
 	
-	hash = hash_chain(q2, uint16(65535-sig))
-
-	if hash != u2 {
+	//verify right side matches signature
+	hash = hash_chain(right_sig, uint16(65535-sig))
+	if hash != right_tip {
 		logf("error merkle solution sig hash 2 does not match")
 		return false, [32]byte{}
 	}
 
-	var b0 = b1
-
+	//recover merkle root from signature, leaf, branches (branches are proof)
+	var root = leaf
 	for i := byte(0); i < 16; i++ {
 		if ((sig >> i) & 1) == 1 {
-			b0 = merkle(b0[0:], z[i][0:])
+			root = merkle(root[0:], branches[i][0:])
 		} else {
-			b0 = merkle(z[i][0:], b0[0:])
+			root = merkle(branches[i][0:], root[0:])
 		}
 	}
 
-	e[0] = merkle(a0[0:], b0[0:])
+	//recover contract address (or more generically, the merkle segment address)
+	address = merkle(short_decider[0:], root[0:])
 
-	var cq1 = commit(q1[0:])
-	var cq2 = commit(q2[0:])
-
+	//map: commit -> address (for later confirmation etc)
+	var left_commit = commit(left_sig[0:])
+	var right_commit = commit(right_sig[0:])
 	segments_merkle_mutex.Lock()
+	segments_merkle_uncommit[commit(address[0:])] = address
+	merkledata_store_epsilonzeroes(left_commit, address)
+	merkledata_store_epsilonzeroes(right_commit, address)
 
-	segments_merkle_uncommit[commit(e[0][0:])] = e[0]
 
-	merkledata_store_epsilonzeroes(cq1, e[0])
-	merkledata_store_epsilonzeroes(cq2, e[0])
-
-	//logf("e0 = %X\n", e[0])
-
-	if a1_is_zero {
-		e[1] = b1
-
+	//for multi-level trees the destination is another segment, otherwise the leaf
+	if next_is_zero {
+		destination = leaf
 	} else {
-		e[1] = merkle(a1[0:], b1[0:])
-
+		destination = merkle(next[0:], leaf[0:]) //actually hash(short_decider, merkle_root) = address
 	}
-	var tx = merkle(e[0][0:], e[1][0:])
-	if a1_is_zero {
-		segments_merkle_whiteheart[tx] = [4][32]byte{q1, q2, u1, u2}
+	
+	//construct the txid (also called the heart) (because this is a transaction!)
+	var tx = merkle(address[0:], destination[0:])
+
+	//map the transaction to the signature
+	if next_is_zero {
+		//different maps depending on if this is the bottom? idk why
+		segments_merkle_whiteheart[tx] = [4][32]byte{left_sig, right_sig, left_tip, right_tip}
 	} else {
-		segments_merkle_blackheart[tx] = [4][32]byte{q1, q2, u1, u2}
+		segments_merkle_blackheart[tx] = [4][32]byte{left_sig, right_sig, left_tip, right_tip}
 	}
 
-	var e0q1 = merkle(e[0][0:], cq1[0:])
-	var e0q2 = merkle(e[0][0:], cq2[0:])
-	segments_merkle_lever[e0q1] = e[1]
-	segments_merkle_lever[e0q2] = e[1]
-
+	//now map: commit + address -> desination
+	//used to correlate new commits to this segment like so:
+	//	commit -> address, then commit + address -> desitnation, then heart/txid = hash(address, destination)
+	//why two steps? because one decider can decide many segments!
+	var address_left_sig = merkle(address[0:], left_commit[0:])
+	var address_right_sig = merkle(address[0:], right_commit[0:])
+	segments_merkle_lever[address_left_sig] = destination
+	segments_merkle_lever[address_right_sig] = destination
 	segments_merkle_mutex.Unlock()
 
-	//var ahash = merkle(a0[0:], a1[0:])
-
-	//segments_merkle_heart[ahash] = [2]commitment_t{q1,q2}
+	//finally trickle the merkle segment if its confirmed already
 	commits_mutex.Lock()
-	//segments_merkle_mutex.Lock()
-	reactivate(tx, e)
-	//segments_merkle_mutex.Unlock()
+	reactivate(tx, [2][32]byte{address, destination})
 	commits_mutex.Unlock()
-	return true, e[0]
+	return true, address
 }
 
 func reactivate(tx [32]byte, e [2][32]byte) {
