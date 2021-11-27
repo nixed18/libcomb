@@ -65,7 +65,7 @@ func hash_chain_compare(in [32]byte, iterations uint16, tag utxotag) bool {
 		hash = sha256.Sum256(buf[32:])
 		copy(buf[32:], hash[:])
 		var candidate, ok = commits[sha256.Sum256(buf[:])]
-		chain_hash_count+=2
+		//chain_hash_count+=2
 		if !ok {
 			continue
 		}
@@ -79,12 +79,12 @@ func hash_chain_compare(in [32]byte, iterations uint16, tag utxotag) bool {
 func hash_chain(in [32]byte, iterations uint16) [32]byte {
 	for i := uint16(0); i < iterations; i++ {
 		in = sha256.Sum256(in[:])
-		chain_hash_count++
+		//chain_hash_count++
 	}
 	return in
 }
 
 func hash256(in []byte) [32]byte {
-	hash_count++
+	//hash_count++
 	return sha256.Sum256(in)
 }

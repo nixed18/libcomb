@@ -240,9 +240,11 @@ func balance_undo(from [32]byte, to [32]byte, amt balance) {
 }
 
 func balance_read(key [32]byte) (b balance) {
+	balance_mutex.RLock()
 	b = 0
 	if bal, ok := balance_node[key]; ok {
 		b = bal
 	}
+	balance_mutex.RUnlock()
 	return b
 }

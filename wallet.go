@@ -25,15 +25,12 @@ func init() {
 func wallet_compute_public_key(key [21][32]byte) (pub [32]byte) {
 	var tip [21][32]byte
 	var buf [672]byte
-	var sli []byte
-	sli = buf[0:0]
 
 	tip = hash_chains_fixed(key, 59213)
 	for i := range tip {
-		sli = append(sli, tip[i][:]...)
+		copy(buf[i*32:i*32+32], tip[i][:])
 	}
-
-	pub = hash256(sli)
+	pub = hash256(buf[:])
 	return pub
 }
 

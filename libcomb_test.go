@@ -2,53 +2,54 @@ package main
 
 import (
 	"testing"
+	"fmt"
+	"sync"
 )
 
-func TestMiner(t *testing.T) {
-	ResetCOMB()
+func init() {
+	logging_enabled = false
+}
+
+var block_mutex sync.RWMutex //mining seperate blocks concurrently is not supported
+var height uint32 = 1
+
+func TestMining(t *testing.T) {
+	fmt.Println("MINING TEST START")
 	var myKey WalletKey = GenerateWalletKey()
 	var myOtherKey WalletKey = GenerateWalletKey()
 	var yourKey WalletKey = GenerateWalletKey()
 
-	//Mine some COMB into myKey
+	block_mutex.Lock()
 	var c Commit
-	c.commit = CommitAddress(myKey.public) //Might want to use steath address's
-	c.tag.height = 1 //First block
+	c.commit = CommitAddress(myKey.public)
+	c.tag.height = height
+	height++
 	LoadCommit(c)
 	FinishBlock()
+	block_mutex.Unlock()
 
 	LoadWalletKey(myKey)
-	logf("\tmyKey\t\t%d\n", GetAddressBalance(myKey.public))
-	logf("\tmyOtherKey\t%d\n", GetAddressBalance(myOtherKey.public))
-	logf("\tyourKey\t\t%d\n",GetAddressBalance(yourKey.public))
 
-	if GetAddressBalance(myKey.public) != 210000000 {
+	if GetAddressBalance(myKey.public) == 0 {
 		t.Error("coinbase error")
 	}
 
-	//Now lets transfer 1 COMB to yourkey
-
-	//Contruct Stack
 	var s Stack
 	s.destination = yourKey.public
 	s.change = myOtherKey.public
 	s.sum = 100000000 //1 COMB
 
-	//Construct Transaction
 	var tx Transaction
 	tx.source = myKey.public
 	tx.destination = GetStackAddress(s)
-	
-	//Sign Transaction
 	var signature = SignTransaction(tx)
 
-	//Load Structures
 	LoadStack(s)
 	LoadTransaction(tx, signature)
 
-	//Commit the signature
-	logf("Committing Signature...\n")
-	c.tag.height = 2
+	block_mutex.Lock()
+	c.tag.height = height
+	height++
 	for i, leg := range signature {
 		c.commit = CommitAddress(leg)
 		c.tag.commitnum = uint16(i)
@@ -56,66 +57,95 @@ func TestMiner(t *testing.T) {
 	}
 	FinishBlock()
 
-	logf("\tmyKey\t\t%d\n", GetAddressBalance(myKey.public))
-	logf("\tmyOtherKey\t%d\n", GetAddressBalance(myOtherKey.public))
-	logf("\tyourKey\t\t%d\n",GetAddressBalance(yourKey.public))
-
-	if GetAddressBalance(yourKey.public) != 100000000 || GetAddressBalance(myOtherKey.public) != 110000000 {
+	if GetAddressBalance(yourKey.public) == 0 || GetAddressBalance(myOtherKey.public) == 0 {
 		t.Error("transaction error")
 	}
 
-	//Rollback the first signature commit
 	c.commit = CommitAddress(signature[0])
 	c.tag.commitnum = 0
 
-	logf("Rolling back Signature...\n")
 	UnloadCommit(c)
 	FinishBlock()
 
-	logf("\tmyKey\t\t%d\n", GetAddressBalance(myKey.public))
-	logf("\tmyOtherKey\t%d\n", GetAddressBalance(myOtherKey.public))
-	logf("\tyourKey\t\t%d\n",GetAddressBalance(yourKey.public))
-
-	if GetAddressBalance(myKey.public) != 210000000 {
+	if GetAddressBalance(myKey.public) == 0 {
 		t.Error("rollback error")
 	}
 
-	logf("Whoops lets add that commit back...\n")
 	c.tag.direction = false
 	LoadCommit(c)
 	FinishBlock()
 
-	logf("\tmyKey\t\t%d\n", GetAddressBalance(myKey.public))
-	logf("\tmyOtherKey\t%d\n", GetAddressBalance(myOtherKey.public))
-	logf("\tyourKey\t\t%d\n",GetAddressBalance(yourKey.public))
-	logf("HASH COUNT: %d\n", hash_count)
-	logf("CHAIN HASH COUNT: %d\n", chain_hash_count)
-
-	if GetAddressBalance(yourKey.public) != 100000000 || GetAddressBalance(myOtherKey.public) != 110000000 {
+	if GetAddressBalance(yourKey.public) == 0 || GetAddressBalance(myOtherKey.public) == 0 {
 		t.Error("redo error")
 	}
+	block_mutex.Unlock()
+	fmt.Println("MINING TEST FINISH")
+}
+
+func TestMiningOrder(t *testing.T) {
+	fmt.Println("ORDERED MINING TEST START")
+	var myKey WalletKey = GenerateWalletKey()
+	var myOtherKey WalletKey = GenerateWalletKey()
+	var yourKey WalletKey = GenerateWalletKey()
+
+	var s Stack
+	s.destination = yourKey.public
+	s.change = myOtherKey.public
+	s.sum = 100000000
+
+	var tx Transaction
+	tx.source = myKey.public
+	tx.destination = GetStackAddress(s)
+
+	LoadStack(s)
+	LoadWalletKey(myKey)
+	var signature = SignTransaction(tx)
+	LoadTransaction(tx, signature)
+
+	block_mutex.Lock()
+	var c Commit
+	c.commit = CommitAddress(myKey.public)
+	c.tag.height = height
+	height++
+	LoadCommit(c)
+	for i, leg := range signature {
+		c.commit = CommitAddress(leg)
+		c.tag.commitnum = uint16(i+1)
+		LoadCommit(c)
+	}
+	FinishBlock()
+	block_mutex.Unlock()
+
+	if GetAddressBalance(yourKey.public) == 0 || GetAddressBalance(myOtherKey.public) == 0 {
+		t.Error("tx order error")
+	}
+	fmt.Println("ORDERED MINING TEST FINISH")
 }
 
 func TestMerkle(t *testing.T) {
-	ResetCOMB()
+	fmt.Println("MERKLE TEST START")
 	var myKey WalletKey = GenerateWalletKey()
 	var myOtherKey WalletKey = GenerateWalletKey()
 	var yourKey WalletKey = GenerateWalletKey()
 	LoadWalletKey(myKey)
 
+	block_mutex.Lock()
 	var c Commit
 	c.commit = CommitAddress(myKey.public)
-	c.tag.height = 1
+	c.tag.height = height
+	height++
 	LoadCommit(c)
 	FinishBlock()
+	block_mutex.Unlock()
 
-	logf("\tmyKey\t\t%d\n", GetAddressBalance(myKey.public))
+	if GetAddressBalance(myKey.public) == 0 {
+		t.Error("coinbase error")
+	}
 
 	var myDecider = GenerateDecider()
 	var myShortDecider = ComputeShortDecider(myDecider)
 
 	var contractTree [65536][32]byte
-	//every other address is zero, dont sign the wrong branch :)
 	contractTree[0] = myOtherKey.public
 	contractTree[1] = yourKey.public
 
@@ -128,32 +158,150 @@ func TestMerkle(t *testing.T) {
 	var signature = SignTransaction(tx)
 
 	LoadTransaction(tx, signature)
-	logf("Committing Tx Signature...\n")
-	c.tag.height = 2
+	block_mutex.Lock()
+	c.tag.height = height
+	height++
 	for i, leg := range signature {
 		c.commit = CommitAddress(leg)
 		c.tag.commitnum = uint16(i)
 		LoadCommit(c)
 	}
 	FinishBlock()
+	block_mutex.Unlock()
 
-	logf("\tmyKey\t\t%d\n", GetAddressBalance(myKey.public))
-	logf("\tcontract\t%d\n", GetAddressBalance(contractAddress))
+	if GetAddressBalance(contractAddress) == 0 {
+		t.Error("transaction error")
+	}
 
 	var myLongDecider = SignDecider(myDecider, 1)
 	var merkleSegment = DecideContract(contract, myLongDecider, contractTree)
 	
-	logf("Committing Long Decider...\n")
-	c.tag.height = 3
+	block_mutex.Lock()
+	c.tag.height = height
+	height++
 	for i, leg := range myLongDecider.signature {
 		c.commit = CommitAddress(leg)
 		c.tag.commitnum = uint16(i)
 		LoadCommit(c)
 	}
 	FinishBlock()
+	block_mutex.Unlock()
+
 	LoadMerkleSegment(merkleSegment)
 
-	logf("\tcontract\t%d\n", GetAddressBalance(contractAddress))
-	logf("\tmyOtherKey\t%d\n", GetAddressBalance(myOtherKey.public))
-	logf("\tyourKey\t\t%d\n", GetAddressBalance(yourKey.public))	
+	if GetAddressBalance(yourKey.public) == 0 {
+		t.Error("merkle error")
+	}
+
+	fmt.Println("MERKLE TEST FINISH")
+}
+
+
+func TestMerkleOrder(t *testing.T) {
+	fmt.Println("ORDERED MERKLE TEST START")
+	var myKey WalletKey = GenerateWalletKey()
+	var myOtherKey WalletKey = GenerateWalletKey()
+	var yourKey WalletKey = GenerateWalletKey()
+
+	var myDecider = GenerateDecider()
+	var myShortDecider = ComputeShortDecider(myDecider)
+
+	var contractTree [65536][32]byte
+	contractTree[0] = myOtherKey.public
+	contractTree[1] = yourKey.public
+
+	var contract = ConstructContract(contractTree, myShortDecider)
+	var contractAddress = ComputeContractAddress(contract)
+
+	var tx Transaction
+	tx.source = myKey.public
+	tx.destination = contractAddress
+	LoadWalletKey(myKey)
+	var signature = SignTransaction(tx)
+
+	var myLongDecider = SignDecider(myDecider, 1)
+	var merkleSegment = DecideContract(contract, myLongDecider, contractTree)
+
+	LoadTransaction(tx, signature)
+	LoadMerkleSegment(merkleSegment)
+
+	block_mutex.Lock()
+	var c Commit
+	var i uint16 = 1
+	c.commit = CommitAddress(myKey.public)
+	c.tag.height = height
+	height++
+	LoadCommit(c)
+	for _, leg := range signature {
+		c.commit = CommitAddress(leg)
+		c.tag.commitnum = i
+		i++
+		LoadCommit(c)
+	}
+	for _, leg := range myLongDecider.signature {
+		c.commit = CommitAddress(leg)
+		c.tag.commitnum = i
+		i++
+		LoadCommit(c)
+	}
+	FinishBlock()
+	block_mutex.Unlock()
+
+	if GetAddressBalance(yourKey.public) == 0 {
+		t.Error("merkle order error")
+	}
+
+	fmt.Println("ORDERED MERKLE TEST FINISH")
+}
+
+func TestHashing(t *testing.T) {
+	var key [21][32]byte
+	var tip [21][32]byte
+	var buf [672]byte
+	var depths = [21]uint16{10,20,30,40,50,60,70,80,90,100,110,120,130,140,150,160,170,180,190,200,210}
+
+	tip = hash_chains(key, depths)
+	for i := range tip {
+		copy(buf[i*32:i*32+32], tip[i][:])
+	}
+	pubA := hash256(buf[:])
+
+	for i := range tip {
+		tip[i] = hash_chain(key[i], depths[i])
+		copy(buf[i*32:i*32+32], tip[i][:])
+	}
+	pubB := hash256(buf[:])
+
+	for i := range tip {
+		tip[i] = key[i]
+		for j := uint16(0); j < depths[i]; j++ {
+			tip[i] = hash256(tip[i][:])
+		}
+		copy(buf[i*32:i*32+32], tip[i][:])
+	}
+	pubC := hash256(buf[:])
+	
+	if pubA != pubB || pubA != pubC {
+		t.Error("hash chain mismatch")
+	}
+}
+
+func TestParallel(t *testing.T) {
+	fmt.Println("PARALLEL TEST")
+	t.Run("Mining", func(t *testing.T) {
+            t.Parallel()
+			TestMining(t)
+	})
+	t.Run("OrderedMining", func(t *testing.T) {
+            t.Parallel()
+			TestMiningOrder(t)
+	})
+	t.Run("Merkle", func(t *testing.T) {
+            t.Parallel()
+			TestMerkle(t)
+	})
+	t.Run("OrderedMerkle", func(t *testing.T) {
+            t.Parallel()
+			TestMerkleOrder(t)
+	})
 }
