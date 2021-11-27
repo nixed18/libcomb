@@ -4,44 +4,16 @@ import "sync"
 
 var segments_merkle_mutex sync.RWMutex
 
-var segments_merkle_uncommit map[[32]byte][32]byte
-var segments_merkle_lever map[[32]byte][32]byte
-var segments_merkle_blackheart map[[32]byte][4][32]byte
-var segments_merkle_whiteheart map[[32]byte][4][32]byte
-var epsilonzeroes map[[32]byte][32]byte
-var segments_merkle_activity map[[32]byte]byte
-var e0_to_e1 map[[32]byte][32]byte
-
-const sigvariability = 65536
-
-const MERKLE_INPUT_A1 = 21
-
-const MERKLE_DATA_U1 = 0
-const MERKLE_DATA_U2 = 1
-const MERKLE_DATA_Q1 = 2
-const MERKLE_DATA_Q2 = 3
-const MERKLE_DATA_Z0 = 4
-const MERKLE_DATA_Z15 = 19
-const MERKLE_DATA_B1 = 20
-const MERKLE_DATA_A0 = 21
-const MERKLE_DATA_E0 = 22
-
-const MERKLE_NEXT_A0 = 0
-const MERKLE_NEXT_B0 = 1
-const MERKLE_NEXT_PHI0 = 2
-const MERKLE_NEXT_B1 = 3
-
-const MERKLE_STAR_A1 = 0
-const MERKLE_STAR_U1 = 1
-const MERKLE_STAR_U2 = 2
-const MERKLE_STAR_E0 = 3
-
-const MERKLE_DIAMOND_A0 = 0
-const MERKLE_DIAMOND_B0 = 1
-const MERKLE_DIAMOND_A1 = 2
+//heart is the id of a merkle segment = hash(address, destination), exactly like a txid
+var segments_merkle_uncommit map[[32]byte][32]byte //commit(address) -> address
+var segments_merkle_lever map[[32]byte][32]byte //hash(address, signature) -> destination
+var segments_merkle_blackheart map[[32]byte][4][32]byte //heart -> long + short
+var segments_merkle_whiteheart map[[32]byte][4][32]byte //heart -> long + short (final segment in tree)
+var epsilonzeroes map[[32]byte][32]byte //commit(signature) -> address
+var segments_merkle_activity map[[32]byte]byte //heart -> activity (last seen activity)
+var e0_to_e1 map[[32]byte][32]byte //address -> destination
 
 func segmentmerkle_reset() {
-	
 	segments_merkle_mutex.Lock()
 	segments_merkle_uncommit = make(map[[32]byte][32]byte)
 	epsilonzeroes = make(map[[32]byte][32]byte)

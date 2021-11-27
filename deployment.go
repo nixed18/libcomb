@@ -1,28 +1,23 @@
 package main
 
+import "fmt"
+
 const version_major byte = 0
-const version_minor byte = 3
-const version_patch byte = 3
+const version_minor byte = 4
+const version_patch byte = 0
 
-const strictly_monotonic_vouts_bugfix_fork_height = 620000
-
-const sign_debug bool = false
-const commitment_mining_selfprinting bool = false
-const wallet_selfmining_links bool = false
 const various_debug_prints_and_self_checking bool = false
 
+var logging_enabled = true
 
-func reset_all() {
-	//should reset all state... hopefully
-	balance_reset()
-	hash_reset()
-	mine_reset()
-	segmentmerkle_reset()
-	segmentstack_reset()
-	segmenttx_reset()
-	txlegs_reset()
-	txresv_reset()
-	usedkey_reset()
-	wallet_reset()
-	resetgraph_reset()
+func logf(f string, a ...interface{}) {
+	if logging_enabled {
+    	fmt.Printf(f, a...)
+	}
+}
+
+func log(a ...interface{}) {
+	if logging_enabled {
+		fmt.Println(a...)
+	}
 }

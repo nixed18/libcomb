@@ -104,13 +104,6 @@ func coinsupply(height uint64) (uint64, uint64) {
 	return lo3, loglo
 }
 
-func ispow2(height uint64) uint64 {
-	if (height & (height - 1)) == 0 {
-		return 1
-	}
-	return 0
-}
-
 func Coinbase(height uint64) uint64 {
 	if height >= 21835313 {
 		return 0

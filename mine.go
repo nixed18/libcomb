@@ -49,7 +49,7 @@ func miner_trickle_cache_leg(iter int, tx *[32]byte) bool {
 	var key = commit_cache[iter]
 	var tagval = commit_tag_cache[iter]
 
-	var oldactivity = tx_legs_activity[*tx]
+	var oldactivity = segments_transaction_activity[*tx]
 	var newactivity = oldactivity
 	var tags [21]utxotag
 	var iterations [21]uint16
@@ -84,7 +84,7 @@ func miner_trickle_cache_leg(iter int, tx *[32]byte) bool {
 
 	//something changed, could be forward or rollback
 	if oldactivity != newactivity {
-		tx_legs_activity[*tx] = newactivity
+		segments_transaction_activity[*tx] = newactivity
 
 		//transaction fully confirmed and valid
 		if newactivity == 2097151 {
@@ -149,9 +149,9 @@ func miner_mine_block() {
 	for iter, key := range commit_cache {
 		merkle_mine(key)
 
-		txleg_mutex.RLock()
+		segments_transaction_mutex.RLock()
 		txlegs_each_leg_target(key, func(tx *[32]byte) bool { return miner_trickle_cache_leg(iter, tx) })
-		txleg_mutex.RUnlock()
+		segments_transaction_mutex.RUnlock()
 	}
 
 	commit_cache = nil
@@ -159,9 +159,6 @@ func miner_mine_block() {
 }
 
 func miner_unmine_block() {
-	var unwritten bool = false
-	var reorg_height uint64
-
 	//rollback the coinbase
 	for i := range commit_rollback {
 		if tagcommit, ok5 := commits[commit_rollback[i]]; ok5 {
@@ -202,15 +199,6 @@ func miner_unmine_block() {
 			if utag_cmp(&ctag, &btag) == 0 {
 				//CommitDbUnWrite(key)
 				delete(commits, key)
-				unwritten = true
-
-				if enable_used_key_feature {
-					log("reorg commit height", ctag.height)
-
-					reorg_height = uint64(ctag.height)
-
-					used_key_commit_reorg(key, reorg_height)
-				}
 			}
 		}
 	}
@@ -224,10 +212,10 @@ func miner_unmine_block() {
 
 		merkle_unmine(key)
 
-		txleg_mutex.RLock()
+		segments_transaction_mutex.RLock()
 
 		txlegs_each_leg_target(key, func(tx *[32]byte) bool {
-			var oldactivity = tx_legs_activity[*tx]
+			var oldactivity = segments_transaction_activity[*tx]
 			var newactivity = oldactivity
 
 			for i := uint(0); i < 21; i++ {
@@ -243,7 +231,7 @@ func miner_unmine_block() {
 			}
 
 			if oldactivity != newactivity {
-				tx_legs_activity[*tx] = newactivity
+				segments_transaction_activity[*tx] = newactivity
 
 				if oldactivity == 2097151 {
 					logf("block rollbacks transaction %X \n", *tx)
@@ -259,16 +247,11 @@ func miner_unmine_block() {
 			return true
 		})
 
-		txleg_mutex.RUnlock()
+		segments_transaction_mutex.RUnlock()
 	}
 
 	commit_rollback = nil
 	commit_rollback_tags = nil
-
-	if unwritten && enable_used_key_feature {
-		log("reorg block height", reorg_height)
-		used_key_height_reorg(reorg_height)
-	}
 
 	//assume we just unmined every commit in the block
 	commit_current_height--

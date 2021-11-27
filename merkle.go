@@ -1,8 +1,5 @@
 package main
 
-import (
-	)
-
 func merkle_mine(c [32]byte) {
 	segments_merkle_mutex.Lock()
 
@@ -81,7 +78,7 @@ outer:
 
 		var hash = data[i]
 
-		for ; j < sigvariability; j++ {
+		for ; j < 65536; j++ {
 			hash = hash256(hash[0:])
 			if hash == data[i+2] {
 				j++
@@ -205,7 +202,7 @@ func reactivate(tx [32]byte, e [2][32]byte) {
 	var oldactivity = segments_merkle_activity[tx]
 	var newactivity = merkle_scan_leg_activity(tx)
 	segments_merkle_activity[tx] = newactivity
-	
+
 	if oldactivity != newactivity {
 		if oldactivity == 3 {
 			//var maybecoinbase = commit(e[0][0:])
@@ -232,6 +229,23 @@ func reactivate(tx [32]byte, e [2][32]byte) {
 			}
 
 			segments_merkle_trickle(make(map[[32]byte]struct{}), e[0])
+		}
+	}
+}
+
+func merkledata_each_epsilonzeroes(source [32]byte, eacher func(*[32]byte) bool) {
+	var iter = source
+
+	for {
+		hash_seq_next(&iter)
+		var maybedata, ok = epsilonzeroes[iter]
+
+		if !ok {
+			return
+		}
+
+		if !eacher(&maybedata) {
+			return
 		}
 	}
 }

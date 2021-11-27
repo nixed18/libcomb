@@ -157,5 +157,12 @@ func LoadMerkleSegment(m MerkleSegment) {
 }
 
 func ResetCOMB() {
-	reset_all()
+	//should reset all state... hopefully
+	balance_reset()
+	mine_reset()
+	segmentmerkle_reset()
+	segmentstack_reset()
+	segmenttx_reset()
+	wallet_reset()
+	resetgraph_reset()
 }

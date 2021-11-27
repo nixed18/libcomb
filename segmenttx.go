@@ -4,10 +4,13 @@ import "sync"
 
 var segments_transaction_mutex sync.RWMutex
 
-var segments_transaction_uncommit map[[32]byte][32]byte
-var segments_transaction_data map[[32]byte][22][32]byte
-var segments_transaction_next map[[32]byte][2][32]byte
-var segments_transaction_doublespends map[[32]byte][2][32]byte
+//tx is the id of a transaction = hash(source, destination)
+var segments_transaction_uncommit map[[32]byte][32]byte //commit(src) -> src
+var segments_transaction_data map[[32]byte][22][32]byte //tx -> src + signature
+var segments_transaction_next map[[32]byte][2][32]byte //src -> = tx + destination
+var segments_transaction_doublespends map[[32]byte][2][32]byte //src -> = tx + destination (unconfirmed)
+var segments_transaction_target map[[32]byte][32]byte //signature commit -> tx
+var segments_transaction_activity map[[32]byte]uint32 //tx -> activity (last seen activity)
 
 func segmenttx_reset() {
 	segments_transaction_mutex.Lock()
@@ -15,6 +18,8 @@ func segmenttx_reset() {
 	segments_transaction_data = make(map[[32]byte][22][32]byte)
 	segments_transaction_next = make(map[[32]byte][2][32]byte)
 	segments_transaction_doublespends = make(map[[32]byte][2][32]byte)
+	segments_transaction_target = make(map[[32]byte][32]byte)
+	segments_transaction_activity = make(map[[32]byte]uint32)
 	segments_transaction_mutex.Unlock()
 }
 

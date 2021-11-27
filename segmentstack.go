@@ -3,8 +3,8 @@ package main
 import "sync"
 
 var segments_stack_mutex sync.RWMutex
-var segments_stack map[[32]byte][72]byte
-var segments_stack_uncommit map[[32]byte][32]byte
+var segments_stack map[[32]byte][72]byte //address -> stack
+var segments_stack_uncommit map[[32]byte][32]byte //commit(address) -> address
 
 func segmentstack_reset() {
 	segments_stack_mutex.Lock()

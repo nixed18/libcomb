@@ -41,7 +41,6 @@ func transaction_load(source, destination [32]byte, signature [21][32]byte) {
 	}
 	
 	commits_mutex.RLock()
-	txleg_mutex.Lock()
 	segments_transaction_mutex.Lock()
 	segments_merkle_mutex.Lock()
 
@@ -64,11 +63,11 @@ func transaction_load(source, destination [32]byte, signature [21][32]byte) {
 	segments_transaction_data[txid] = txcommitsandfrom
 
 	//check if transaction is valid (commited + not a double spend), and trickle/untrickle accordingly
-	var oldactivity = tx_legs_activity[txid]
+	var oldactivity = segments_transaction_activity[txid]
 	var newactivity = tx_scan_leg_activity(txid)
 
 	//logf("old %021b\nnew %021b\n", oldactivity, newactivity)
-	tx_legs_activity[txid] = newactivity
+	segments_transaction_activity[txid] = newactivity
 	if oldactivity != newactivity {
 		//there is an older transaction thats valid
 		if oldactivity == 2097151 /*0b111111111111111111111 (21 1's)*/ {
@@ -87,6 +86,147 @@ func transaction_load(source, destination [32]byte, signature [21][32]byte) {
 	}
 	segments_merkle_mutex.Unlock()
 	segments_transaction_mutex.Unlock()
-	txleg_mutex.Unlock()
 	commits_mutex.RUnlock()
+}
+
+func hash_seq_next(h *[32]byte) {
+	//treat h as a big 256bit integer and increment it
+	for i := range *h {
+		if (*h)[i] != 255 {
+			(*h)[i]++
+			break
+		}
+		(*h)[i] = 0
+	}
+}
+
+func txlegs_store_leg(leg [32]byte, totx [32]byte) bool {
+	//attempt to store (leg -> totx) in segments_transaction_target
+	//if the leg is already mapped then increment leg until it finds free spot (return true),
+	//or finds a spot thats already mapped to totx (return false)
+
+	//the other store functions in this file work the same way
+
+	var iter = leg
+	for {
+		hash_seq_next(&iter)
+
+		var maybetx, ok = segments_transaction_target[iter]
+
+		if !ok {
+			segments_transaction_target[iter] = totx
+			return true
+		}
+		if ok && maybetx == totx {
+			return false
+		}
+	}
+}
+
+func txlegs_each_leg_target(leg [32]byte, eacher func(*[32]byte) bool) {
+	//execute eacher on all the entries including and after leg in segments_transaction_target
+	//terminates if eacher return false or there are no more entries
+	//essentially executes eather on every txid that leg has been mapped to (every double spend + valid spend)
+
+	//other target functions in this file work the same way
+
+	var iter = leg
+
+	for {
+		hash_seq_next(&iter)
+		var maybetx, ok = segments_transaction_target[iter]
+
+		if !ok {
+			return
+		}
+
+		if !eacher(&maybetx) {
+			return
+		}
+	}
+}
+
+func txdoublespends_store_doublespend(source [32]byte, to [2][32]byte) bool {
+	var iter = source
+
+	for {
+		hash_seq_next(&iter)
+
+		var maybetx, ok = segments_transaction_doublespends[iter]
+
+		if !ok {
+			segments_transaction_doublespends[iter] = to
+			return true
+		}
+		if ok && maybetx == to {
+			return false
+		}
+	}
+}
+
+func txdoublespends_each_doublespend_target(source [32]byte, eacher func(*[2][32]byte) bool) {
+	var iter = source
+
+	for {
+		hash_seq_next(&iter)
+		var maybetx, ok = segments_transaction_doublespends[iter]
+
+		if !ok {
+			return
+		}
+
+		if !eacher(&maybetx) {
+			return
+		}
+	}
+}
+
+func merkledata_store_epsilonzeroes(source [32]byte, to [32]byte) bool {
+	var iter = source
+
+	for {
+		hash_seq_next(&iter)
+
+		var maybedata, ok = epsilonzeroes[iter]
+
+		if !ok {
+			epsilonzeroes[iter] = to
+			return true
+		}
+		if ok && maybedata == to {
+			return false
+		}
+	}
+}
+
+func tx_scan_leg_activity(tx [32]byte) (activity uint32) {
+
+	var data, ok1 = segments_transaction_data[tx]
+	if !ok1 {
+		return 0
+	}
+
+	var tags [21]utxotag
+	var iterations [21]uint16
+	var input [21][32]byte
+	for i := 0; i < 21; i++ { 
+		input[i] = data[i]
+		var roottag, ok2 = commits[commit(data[i][0:])]
+
+		if !ok2 {
+			iterations[i] = 0
+		} else {
+			iterations[i] = 65535
+			tags[i] = roottag
+		}
+	}
+
+	var activities = hash_chains_compare(input, iterations, tags)
+
+	for i := 0; i < 21; i++ { 
+		if activities[i] {
+			activity |= 1 << uint(i)
+		}
+	}
+	return activity
 }

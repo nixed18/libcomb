@@ -55,28 +55,6 @@ func balance_create_loop(where_node [32]byte) {
 	balance_mutex.Unlock()
 }
 
-func balance_withdraw_loop(where_node [32]byte, sum uint64) {
-	balance_mutex.Lock()
-	var bal = balance_loop[where_node]
-
-	if sum > bal {
-		println("balance_withdraw_loop: not enough looped cash")
-		println(sum)
-		println(bal)
-		logf("%X is the commitment\n", where_node)
-		panic("")
-	}
-
-	if sum == bal {
-		delete(balance_loop, where_node)
-	} else {
-		balance_loop[where_node] -= sum
-	}
-	balance_node[where_node] += sum
-
-	balance_mutex.Unlock()
-}
-
 func balance_create_coinbase(where_node [32]byte, sum uint64) {
 	balance_mutex.Lock()
 
@@ -150,27 +128,6 @@ func balance_check(from [32]byte, to [32]byte) balance {
 	return bal
 }
 
-func balance_check2(from [32]byte, to [32]byte, to2 [32]byte) balance {
-	if to == to2 {
-		return balance_check(from, to)
-	}
-
-	var m = merkle(from[0:], to[0:])
-	var n = merkle(from[0:], to2[0:])
-
-	balance_mutex.RLock()
-	var bal = balance_edge[m]
-	var bal2 = balance_edge[n]
-
-	balance_mutex.RUnlock()
-
-	if various_debug_prints_and_self_checking {
-		logf("%X ~~ %X %X %21d\n", from, to, to2, bal)
-	}
-
-	return bal + bal2
-}
-
 func balance_split_if_enough(from [32]byte, to [32]byte, tobal [32]byte, bal balance) (out byte) {
 	var m = merkle(from[0:], tobal[0:])
 	if various_debug_prints_and_self_checking {
@@ -203,40 +160,6 @@ func balance_split_if_enough(from [32]byte, to [32]byte, tobal [32]byte, bal bal
 
 	balance_do(from, to, 0xffffffffffffffff)
 	return out
-}
-
-func balance_undo(from [32]byte, to [32]byte, amt balance) {
-	var m = merkle(from[0:], to[0:])
-
-	if various_debug_prints_and_self_checking {
-		logf("%X <- %X % 21d\n", from, to, amt)
-	}
-
-	balance_mutex.Lock()
-	var bal = balance_edge[m]
-	if amt >= bal {
-		amt = bal
-		delete(balance_edge, m)
-	} else {
-		balance_edge[m] -= amt
-	}
-	var sum = balance_node[to]
-	if amt > sum {
-		println(sum)
-		println(amt)
-		logf("%X is from commitment\n", from)
-		logf("%X is to commitment\n", to)
-		println("balance_undo: target has insufficient balance")
-		panic("")
-	} else if amt == sum {
-		delete(balance_node, to)
-		balance_node[from] += amt
-	} else {
-		balance_node[to] -= amt
-		balance_node[from] += amt
-	}
-	balance_mutex.Unlock()
-
 }
 
 func balance_read(key [32]byte) (b balance) {
