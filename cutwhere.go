@@ -1,4 +1,4 @@
-package main
+package libcomb
 
 const BIG = 9
 const LEVELS = 59213

@@ -1,4 +1,4 @@
-package main
+package libcomb
 
 const precision = 50
 

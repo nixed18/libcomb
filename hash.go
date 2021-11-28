@@ -1,4 +1,4 @@
-package main
+package libcomb
 
 import ( 
 	"github.com/minio/sha256-simd"

@@ -1,4 +1,4 @@
-package main
+package libcomb
 
 type utxotag struct {
 	direction bool

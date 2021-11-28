@@ -1,4 +1,4 @@
-package main
+package libcomb
 
 type WalletKey struct {
 	public  [32]byte

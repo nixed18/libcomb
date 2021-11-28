@@ -1,4 +1,4 @@
-package main
+package libcomb
 
 func uint64_to_bytes(in uint64) (out [8]byte) {
 	out[7] = byte((in >> 0) % 256)

@@ -1,4 +1,4 @@
-package main
+package libcomb
 
 const reset_whole_graph_on_reorg bool = true
 

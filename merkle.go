@@ -1,4 +1,4 @@
-package main
+package libcomb
 
 func merkle_mine(c [32]byte) {
 	segments_merkle_mutex.Lock()

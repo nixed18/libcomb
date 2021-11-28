@@ -1,4 +1,4 @@
-package main
+package libcomb
 
 func add_to_backgraph(backgraph map[[32]byte][][32]byte, from, to [32]byte) {
 	if len(backgraph[from]) == 0 {

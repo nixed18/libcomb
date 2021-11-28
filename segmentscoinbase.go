@@ -1,4 +1,4 @@
-package main
+package libcomb
 
 func segments_coinbase_untrickle_auto(previous [32]byte, next [32]byte) {
 	var tag, ok = commits[previous]
