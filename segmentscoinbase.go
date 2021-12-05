@@ -8,7 +8,7 @@ func segments_coinbase_untrickle_auto(previous [32]byte, next [32]byte) {
 
 	var t = tag
 
-	var bal = Coinbase(uint64(t.height))
+	var bal = Coinbase(uint64(t.Height))
 
 	if balance_check(previous, next) == bal {
 		segments_coinbase_untrickle(previous, next, bal)
@@ -29,7 +29,7 @@ func segments_coinbase_trickle_auto(commitment [32]byte, to [32]byte) {
 	}
 	var t = tag
 
-	var bal = Coinbase(uint64(t.height))
+	var bal = Coinbase(uint64(t.Height))
 
 	if balance_check(commitment, to) != bal {
 		segments_coinbase_trickle(commitment, to, bal)

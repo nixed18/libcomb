@@ -46,9 +46,8 @@ func wallet_generate_key() (public [32]byte, private [21][32]byte) {
 	return public, private
 }
 
-func wallet_load_key(key [21][32]byte) {
-
-	public := wallet_compute_public_key(key)
+func wallet_load_key(key [21][32]byte) (public [32]byte) {
+	public = wallet_compute_public_key(key)
 	pub_commit := commit(public[0:])
 
 	wallet_mutex.Lock()
@@ -64,6 +63,7 @@ func wallet_load_key(key [21][32]byte) {
 	}
 	commits_mutex.Unlock()
 	commit_cache_mutex.Unlock()
+	return public
 }
 
 func wallet_sign_transaction(source [32]byte, destination [32]byte) (signature [21][32]byte) {
@@ -88,7 +88,7 @@ func wallet_sign_transaction(source [32]byte, destination [32]byte) (signature [
 	var id = hash256(slice)
 	depths := CutCombWhere(id[0:])
 	for i := range depths {
-		depths[i] = uint16(LEVELS)-uint16(depths[i])
+		depths[i] = uint16(LEVELS) - uint16(depths[i])
 	}
 
 	signature = hash_chains(key, depths)

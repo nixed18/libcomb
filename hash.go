@@ -42,7 +42,7 @@ func hash_chains_fixed(in [21][32]byte, iterations uint16) [21][32]byte {
 	return hash_chains(in, arr)
 }
 
-func hash_chains_compare(in [21][32]byte, iterations [21]uint16, tags [21]utxotag) [21]bool {
+func hash_chains_compare(in [21][32]byte, iterations [21]uint16, tags [21]UTXOtag) [21]bool {
 	var out [21]bool
 	var wg sync.WaitGroup
 	for i := uint16(0); i < 21; i++ {
@@ -56,7 +56,7 @@ func hash_chains_compare(in [21][32]byte, iterations [21]uint16, tags [21]utxota
 	return out
 }
 
-func hash_chain_compare(in [32]byte, iterations uint16, tag utxotag) bool {
+func hash_chain_compare(in [32]byte, iterations uint16, tag UTXOtag) bool {
 	var buf [64]byte
 	var hash [32]byte = in
 	copy(buf[0:], whitepaper[:])

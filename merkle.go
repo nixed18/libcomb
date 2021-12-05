@@ -133,7 +133,7 @@ func notify_transaction(next, short_decider, left_tip, right_tip, left_sig, righ
 		logf("error merkle signature invalid")
 		return false, [32]byte{}
 	}
-	
+
 	//verify right side matches signature
 	hash = hash_chain(left_sig, uint16(65535-sig))
 	if hash != left_tip {
@@ -152,7 +152,7 @@ func notify_transaction(next, short_decider, left_tip, right_tip, left_sig, righ
 	}
 
 	//recover contract address (or more generically, the merkle segment address)
-	address = merkle(short_decider[0:], root[0:])	
+	address = merkle(short_decider[0:], root[0:])
 
 	//map: commit -> address (for later confirmation etc)
 	var left_commit = commit(left_sig[0:])
@@ -162,14 +162,13 @@ func notify_transaction(next, short_decider, left_tip, right_tip, left_sig, righ
 	merkledata_store_segments_merkle_target(left_commit, address)
 	merkledata_store_segments_merkle_target(right_commit, address)
 
-
 	//for multi-level trees the destination is another segment, otherwise the leaf
 	if next_is_zero {
 		destination = leaf
 	} else {
 		destination = merkle(next[0:], leaf[0:]) //actually hash(short_decider, merkle_root) = address
 	}
-	
+
 	//construct the txid (also called the heart) (because this is a transaction!)
 	var tx = merkle(address[0:], destination[0:])
 

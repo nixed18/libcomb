@@ -2,13 +2,31 @@ package libcomb
 
 import (
 	"crypto/rand"
+	"sync"
 )
+
+var purse_mutex sync.Mutex
+var purse map[[32]byte][2][32]byte //short->decider
+
+func init() {
+	purse = make(map[[32]byte][2][32]byte)
+}
+
+func purse_load_decider(decider [2][32]byte) (short_address [32]byte) {
+	var next [32]byte
+	var short [2][32]byte = purse_compute_short_decider(decider)
+	short_address = purse_compute_short_address(short, next)
+	purse_mutex.Lock()
+	purse[short_address] = decider
+	purse_mutex.Unlock()
+	return short_address
+}
 
 func purse_generate_decider() (private [2][32]byte) {
 	for i := range private {
 		_, err := rand.Read(private[i][0:])
 		if err != nil {
-			logf("error generating true random key: %s", err)
+			logf("error generating true random key (%s)", err.Error())
 			return
 		}
 	}
@@ -20,7 +38,6 @@ func purse_compute_short_decider(decider [2][32]byte) (short [2][32]byte) {
 	short[1] = hash_chain(decider[1], 65535)
 	return short
 }
-
 
 func purse_compute_short_address(short [2][32]byte, next [32]byte) (short_address [32]byte) {
 	var buf [96]byte
@@ -54,7 +71,7 @@ func purse_recover_signed_number(short [2][32]byte, signature [2][32]byte) (numb
 	if hash != short[1] {
 		return 0, false
 	}
-	
+
 	hash = hash_chain(signature[0], uint16(65535-number))
 	if hash != short[0] {
 		return 0, false

@@ -1,33 +1,32 @@
 package libcomb
 
 import (
-		"sync"
+	"sync"
 )
 
 var commits_mutex sync.RWMutex
 
-var commits map[[32]byte]utxotag
+var commits map[[32]byte]UTXOtag
 var combbases map[[32]byte]struct{}
 
 var commit_cache_mutex sync.Mutex
 
-var commit_current_height uint32
+var commit_current_height uint64
 var commit_cache [][32]byte
-var commit_tag_cache []utxotag
-var commit_rollback [][32]byte
-var commit_rollback_tags []utxotag
+var commit_cache_tags []UTXOtag
+
+var commit_diff []Commit
 
 func mine_reset() {
 	commits_mutex.Lock()
 	commit_cache_mutex.Lock()
 
-	commits = make(map[[32]byte]utxotag)
+	commits = make(map[[32]byte]UTXOtag)
 	combbases = make(map[[32]byte]struct{})
 	commit_current_height = 0
 	commit_cache = nil
-	commit_tag_cache = nil
-	commit_rollback = nil
-	commit_rollback_tags = nil
+	commit_cache_tags = nil
+	commit_diff = nil
 
 	commit_cache_mutex.Unlock()
 	commits_mutex.Unlock()
@@ -37,7 +36,7 @@ func init() {
 	mine_reset()
 }
 
-func height_view() (h uint32) {
+func height_view() (h uint64) {
 	commit_cache_mutex.Lock()
 	h = commit_current_height
 	commit_cache_mutex.Unlock()
@@ -47,16 +46,16 @@ func height_view() (h uint32) {
 //trickles a tx if its confirmed by commit_cache[iter]
 func miner_trickle_cache_leg(iter int, tx *[32]byte) bool {
 	var key = commit_cache[iter]
-	var tagval = commit_tag_cache[iter]
+	var tagval = commit_cache_tags[iter]
 
 	var oldactivity = segments_transaction_activity[*tx]
 	var newactivity = oldactivity
-	var tags [21]utxotag
+	var tags [21]UTXOtag
 	var iterations [21]uint16
 	var input [21][32]byte
 
 	//setup input for hash_chains
-	for i := 0; i < 21; i++ { 
+	for i := 0; i < 21; i++ {
 		input[i] = segments_transaction_data[*tx][i]
 		ok := (key == commit(input[i][:]))
 
@@ -67,11 +66,11 @@ func miner_trickle_cache_leg(iter int, tx *[32]byte) bool {
 			tags[i] = tagval
 		}
 	}
-	
+
 	//compute leg activity
 	var activities = hash_chains_compare(input, iterations, tags)
 
-	for i := 0; i < 21; i++ { 
+	for i := 0; i < 21; i++ {
 		if oldactivity&(1<<i) != 0 {
 			continue
 		}
@@ -123,47 +122,60 @@ func miner_trickle_cache_leg(iter int, tx *[32]byte) bool {
 }
 
 func miner_mine_block() {
+	commit_cache_mutex.Lock()
+	commits_mutex.Lock()
+	commit_diff = nil
+
 	//give coinbase to the first unseen commit
-	for i := range commit_cache {
-		if _, ok := commits[commit_cache[i]]; !ok {
-			var basetag = commit_tag_cache[i]
-			var btag = basetag
-			var bheight = uint64(btag.height)
-
-			segments_coinbase_mine(commit_cache[i], bheight)
-			combbases[commit_cache[i]] = struct{}{}
-
+	for i, c := range commit_cache {
+		if _, ok := commits[c]; !ok {
+			segments_coinbase_mine(c, commit_cache_tags[i].Height)
+			combbases[c] = struct{}{}
 			break
 		}
 	}
-	
+
 	//load the cache into main memory
-	for key, val := range commit_cache {
-		if _, ok := commits[val]; ok {
-		} else {
-			commits[val] = commit_tag_cache[key]
+	for i, c := range commit_cache {
+		if _, ok := commits[c]; !ok {
+			commit_diff = append(commit_diff, Commit{c, commit_cache_tags[i]})
+			commits[c] = commit_cache_tags[i]
 		}
 	}
 
 	//trickle constructs that are confirmed by these commits (transaction, decider, etc)
-	for iter, key := range commit_cache {
-		merkle_mine(key)
+	for i, c := range commit_cache {
+		merkle_mine(c)
 
 		segments_transaction_mutex.RLock()
-		txlegs_each_leg_target(key, func(tx *[32]byte) bool { return miner_trickle_cache_leg(iter, tx) })
+		txlegs_each_leg_target(c, func(tx *[32]byte) bool { return miner_trickle_cache_leg(i, tx) })
 		segments_transaction_mutex.RUnlock()
 	}
 
+	//update the current height
+	if len(commit_cache) != 0 {
+		commit_current_height = commit_cache_tags[0].Height
+	}
+
 	commit_cache = nil
-	commit_tag_cache = nil
+	commit_cache_tags = nil
+
+	resetgraph()
+
+	commits_mutex.Unlock()
+	commit_cache_mutex.Unlock()
+	return
 }
 
 func miner_unmine_block() {
+	commit_cache_mutex.Lock()
+	commits_mutex.Lock()
+	commit_diff = nil
 	//rollback the coinbase
-	for i := range commit_rollback {
-		if tagcommit, ok5 := commits[commit_rollback[i]]; ok5 {
+	for i := range commit_cache {
+		if tagcommit, ok := commits[commit_cache[i]]; ok {
 
-			var basetag = commit_rollback_tags[i]
+			var basetag = commit_cache_tags[i]
 			var ctag = tagcommit
 			var btag = basetag
 
@@ -171,12 +183,12 @@ func miner_unmine_block() {
 				continue
 			}
 
-			var bheight = uint64(btag.height)
+			var bheight = uint64(btag.Height)
 
-			if _, ok6 := combbases[commit_rollback[i]]; ok6 {
+			if _, ok = combbases[commit_cache[i]]; ok {
 
-				segments_coinbase_unmine(commit_rollback[i], bheight)
-				delete(combbases, commit_rollback[i])
+				segments_coinbase_unmine(commit_cache[i], bheight)
+				delete(combbases, commit_cache[i])
 
 			}
 
@@ -184,27 +196,25 @@ func miner_unmine_block() {
 		}
 	}
 
-	//delete the commits from main memory + free used keys
-	for i := len(commit_rollback) - 1; i >= 0; i-- {
-		key := commit_rollback[i]
+	//delete the commits from main memory
+	for i := len(commit_cache) - 1; i >= 0; i-- {
+		key := commit_cache[i]
 
-		if tagcommit, ok5 := commits[key]; !ok5 {
-		} else {
-
-			taggy := commit_rollback_tags[i]
+		if tagcommit, ok := commits[key]; ok {
+			taggy := commit_cache_tags[i]
 
 			var ctag = tagcommit
 			var btag = taggy
 
 			if utag_cmp(&ctag, &btag) == 0 {
-				//CommitDbUnWrite(key)
+				commit_diff = append(commit_diff, Commit{key, commit_cache_tags[i]})
 				delete(commits, key)
 			}
 		}
 	}
-	
+
 	//finally rollback any constructs previously confirmed by these commits (transaction, decider, etc)
-	for _, key := range commit_rollback {
+	for _, key := range commit_cache {
 
 		if _, ok5 := commits[key]; ok5 {
 			continue
@@ -250,93 +260,69 @@ func miner_unmine_block() {
 		segments_transaction_mutex.RUnlock()
 	}
 
-	commit_rollback = nil
-	commit_rollback_tags = nil
+	commit_cache = nil
+	commit_cache_tags = nil
 
-	//assume we just unmined every commit in the block
-	commit_current_height--
-}
-
-func miner_finish_block() {
-	commit_cache_mutex.Lock()
-	commits_mutex.Lock()
-	if len(commit_rollback) > 0 && len(commit_cache) > 0 {
-		//protect from this in the interface!
-		commits_mutex.Unlock()
-		commit_cache_mutex.Unlock()
-		return
-	} else if len(commit_cache) > 0 {
-		miner_mine_block()
-	} else if len(commit_rollback) > 0 {
-		miner_unmine_block()
-	} else {
-		//nothing to do!
+	//update the current height
+	commit_current_height = 0
+	for _, tag := range commits {
+		if tag.Height > commit_current_height {
+			commit_current_height = tag.Height
+		}
 	}
 
 	resetgraph()
 
 	commits_mutex.Unlock()
 	commit_cache_mutex.Unlock()
-	return
 }
 
-func miner_mine_commit(rawcommit [32]byte, tag utxotag) {
+func miner_mine_commit(rawcommit [32]byte, tag UTXOtag) {
 	var is_first bool
 
 	commit_cache_mutex.Lock()
 
-	is_first = len(commit_cache)+len(commit_rollback) == 0
+	is_first = len(commit_cache) == 0
 
 	//can only mine a commit thats higher than the current block
-	if is_first && commit_current_height >= tag.height {
+	if is_first && commit_current_height >= tag.Height {
 		commit_cache_mutex.Unlock()
-		logf("error: mined first commitment must be on greater height\n")
+		logf("error mined first commitment must be on greater height, %d >= %d\n", commit_current_height, tag.Height)
 		return
 	}
 	//every batch of commits is in the same block
-	if !is_first && commit_current_height != tag.height {
+	if !is_first && tag.Height != commit_cache_tags[0].Height {
 		commit_cache_mutex.Unlock()
-		logf("error: commitment must be on same height as first commitment\n")
+		logf("error commitment must be on same height as first commitment, %d != %d\n", commit_cache_tags[0].Height, tag.Height)
 		return
 	}
 
 	commit_cache = append(commit_cache, rawcommit)
-	commit_tag_cache = append(commit_tag_cache, tag)
-
-	commits_mutex.Lock()
-	if is_first {
-		commit_current_height = tag.height
-	}
-	commits_mutex.Unlock()
+	commit_cache_tags = append(commit_cache_tags, tag)
 	commit_cache_mutex.Unlock()
 }
 
-func miner_unmine_commit(rawcommit [32]byte, tag utxotag) {
+func miner_unmine_commit(rawcommit [32]byte, tag UTXOtag) {
 	var is_first bool
 
 	commit_cache_mutex.Lock()
 
-	is_first = len(commit_cache)+len(commit_rollback) == 0
+	is_first = len(commit_cache) == 0
 
 	//cant unmine a commit thats higher than the current block
-	if is_first && commit_current_height < tag.height {
+	if is_first && commit_current_height < tag.Height {
 		commit_cache_mutex.Unlock()
-		logf("error: unmined first commitment must be on smaller height\n")
+		logf("error unmined first commitment must be on smaller height, %d >= %d\n", commit_current_height, tag.Height)
 		return
 	}
 	//every batch of commits is in the same block
-	if !is_first && commit_current_height != tag.height {
+	if !is_first && tag.Height != commit_cache_tags[0].Height {
 		commit_cache_mutex.Unlock()
-		logf("error: commitment must be on same height as first commitment\n")
+		logf("error commitment must be on same height as first commitment, %d != %d\n", commit_cache_tags[0], tag.Height)
 		return
 	}
 
-	commit_rollback = append(commit_rollback, rawcommit)
-	commit_rollback_tags = append(commit_rollback_tags, tag)
-	commits_mutex.Lock()
-	if is_first {
-		commit_current_height = tag.height
-	}
-	commits_mutex.Unlock()
+	commit_cache = append(commit_cache, rawcommit)
+	commit_cache_tags = append(commit_cache_tags, tag)
 	commit_cache_mutex.Unlock()
 }

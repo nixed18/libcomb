@@ -1,7 +1,8 @@
 package libcomb
 
 import (
-	)
+	"errors"
+)
 
 func transaction_raw_data(source, destination [32]byte) (raw [64]byte) {
 	copy(raw[0:], source[0:])
@@ -9,7 +10,7 @@ func transaction_raw_data(source, destination [32]byte) (raw [64]byte) {
 	return raw
 }
 
-func transaction_load(source, destination [32]byte, signature [21][32]byte) {
+func transaction_load(source, destination [32]byte, signature [21][32]byte) (address [32]byte, err error) {
 	var txcommitsandfrom [22][32]byte
 	var txidandto [2][32]byte
 	var txraw = transaction_raw_data(source, destination)
@@ -34,12 +35,11 @@ func transaction_load(source, destination [32]byte, signature [21][32]byte) {
 	}
 
 	var actuallyfrom = hash256(data[:])
-	
+
 	if actuallyfrom != source {
-		log("error signature invalid")
-		return
+		return address, errors.New("signature invalid")
 	}
-	
+
 	commits_mutex.RLock()
 	segments_transaction_mutex.Lock()
 	segments_merkle_mutex.Lock()
@@ -50,7 +50,7 @@ func transaction_load(source, destination [32]byte, signature [21][32]byte) {
 
 	//point each signature commit to our transaction
 	//used to trickle funds when all commits are seen, or untrickle if commits are rolled back
-	for i := 0; i < 21; i++ {  
+	for i := 0; i < 21; i++ {
 		txlegs_store_leg(commit(signature[i][0:]), txid)
 	}
 
@@ -87,6 +87,8 @@ func transaction_load(source, destination [32]byte, signature [21][32]byte) {
 	segments_merkle_mutex.Unlock()
 	segments_transaction_mutex.Unlock()
 	commits_mutex.RUnlock()
+
+	return txid, nil
 }
 
 func hash_seq_next(h *[32]byte) {
@@ -206,10 +208,10 @@ func tx_scan_leg_activity(tx [32]byte) (activity uint32) {
 		return 0
 	}
 
-	var tags [21]utxotag
+	var tags [21]UTXOtag
 	var iterations [21]uint16
 	var input [21][32]byte
-	for i := 0; i < 21; i++ { 
+	for i := 0; i < 21; i++ {
 		input[i] = data[i]
 		var roottag, ok2 = commits[commit(data[i][0:])]
 
@@ -223,7 +225,7 @@ func tx_scan_leg_activity(tx [32]byte) (activity uint32) {
 
 	var activities = hash_chains_compare(input, iterations, tags)
 
-	for i := 0; i < 21; i++ { 
+	for i := 0; i < 21; i++ {
 		if activities[i] {
 			activity |= 1 << uint(i)
 		}

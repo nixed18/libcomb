@@ -1,7 +1,6 @@
 package libcomb
 
-import (
-	)
+import ()
 
 func stack_encode(destination, change [32]byte, sum uint64) (raw [72]byte) {
 	var sum_bytes [8]byte = uint64_to_bytes(sum)
@@ -17,7 +16,7 @@ func stack_address(destination, change [32]byte, sum uint64) [32]byte {
 	return hash
 }
 
-func stack_load_data(destination, change [32]byte, sum uint64) {
+func stack_load_data(destination, change [32]byte, sum uint64) [32]byte {
 	var rawdata = stack_encode(destination, change, sum)
 	var hash = hash256(rawdata[0:])
 	var maybecoinbase = commit(hash[0:])
@@ -38,6 +37,7 @@ func stack_load_data(destination, change [32]byte, sum uint64) {
 	segments_stack_trickle(make(map[[32]byte]struct{}), hash)
 	segments_merkle_mutex.RUnlock()
 	segments_transaction_mutex.RUnlock()
+	return hash
 }
 
 func stack_decode(b []byte) (changeto [32]byte, sumto [32]byte, sum uint64) {

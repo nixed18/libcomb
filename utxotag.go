@@ -1,24 +1,13 @@
 package libcomb
 
-type utxotag struct {
-	direction bool
-	height    uint32
-	commitnum uint16
+type UTXOtag struct {
+	Height    uint64
+	Commitnum uint32
 }
 
-const UTAG_UNMINE int = -1
-const UTAG_MINE int = 1
-
-func utag_mining_sign(t utxotag) int {
-	if t.direction {
-		return UTAG_UNMINE
+func utag_cmp(l *UTXOtag, r *UTXOtag) int {
+	if l.Height != r.Height {
+		return int(l.Height) - int(r.Height)
 	}
-	return UTAG_MINE
-}
-
-func utag_cmp(l *utxotag, r *utxotag) int {
-	if l.height != r.height {
-		return int(l.height) - int(r.height)
-	}
-	return int(l.commitnum) - int(r.commitnum)
+	return int(l.Commitnum) - int(r.Commitnum)
 }

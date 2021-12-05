@@ -28,7 +28,7 @@ func resetgraph() {
 
 		var btag = basetag
 
-		var bheight = uint64(btag.height)
+		var bheight = uint64(btag.Height)
 
 		segments_coinbase_mine(commitment, bheight)
 

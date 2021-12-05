@@ -1,61 +1,65 @@
 package libcomb
 
+import (
+	"errors"
+	"sync"
+)
+
 type WalletKey struct {
-	public  [32]byte
-	private [21][32]byte
-	balance uint64
+	Public  [32]byte
+	Private [21][32]byte
 }
 
 type Stack struct {
-	destination [32]byte
-	sum         uint64
-	change      [32]byte
+	Destination [32]byte
+	Sum         uint64
+	Change      [32]byte
 }
 
 type Transaction struct {
-	source      [32]byte
-	destination [32]byte
+	Source      [32]byte
+	Destination [32]byte
 }
 
 type Commit struct {
-	commit	[32]byte
-	tag		utxotag
+	Commit [32]byte
+	Tag    UTXOtag
 }
 
 type Decider struct {
-	private [2][32]byte
+	Private [2][32]byte
 }
 
 type ShortDecider struct {
-	public [2][32]byte
+	Public [2][32]byte
 }
 
 type LongDecider struct {
-	signature [2][32]byte
+	Signature [2][32]byte
 }
 
 type MerkleSegment struct {
-	short [2][32]byte
-	long [2][32]byte
-	branches [16][32]byte
-	leaf [32]byte
-	next [32]byte
+	Short    [2][32]byte
+	Long     [2][32]byte
+	Branches [16][32]byte
+	Leaf     [32]byte
+	Next     [32]byte
 }
 
 type Contract struct {
-	short [2][32]byte
-	next [32]byte
-	root [32]byte
+	Short [2][32]byte
+	Next  [32]byte
+	Root  [32]byte
 }
 
 func ComputeWalletKey(key [21][32]byte) (w WalletKey) {
-	w.private = key
-	w.public = wallet_compute_public_key(key)
+	w.Private = key
+	w.Public = wallet_compute_public_key(key)
 	return w
 }
 
 func GenerateWalletKey() (w WalletKey) {
-	w.public, w.private = wallet_generate_key()
+	w.Public, w.Private = wallet_generate_key()
 	return w
 }
 
@@ -64,45 +68,77 @@ func GetAddressBalance(address [32]byte) uint64 {
 }
 
 func SignTransaction(tx Transaction) [21][32]byte {
-	var signature = wallet_sign_transaction(tx.source, tx.destination)
+	var signature = wallet_sign_transaction(tx.Source, tx.Destination)
 	return signature
 }
 
-func LoadTransaction(tx Transaction, signature [21][32]byte ) {
-	transaction_load(tx.source, tx.destination, signature)
+func LoadTransaction(tx Transaction, signature [21][32]byte) ([32]byte, error) {
+	return transaction_load(tx.Source, tx.Destination, signature)
 }
 
-func LoadWalletKey(k WalletKey) {
-	wallet_load_key(k.private)
-	return
+func LoadWalletKey(k WalletKey) [32]byte {
+	return wallet_load_key(k.Private)
 }
 
-func LoadStack(s Stack) {
-	stack_load_data(s.destination, s.change, s.sum)
-	return
+func LoadStack(s Stack) [32]byte {
+	return stack_load_data(s.Destination, s.Change, s.Sum)
 }
 
 func GetStackAddress(s Stack) [32]byte {
-	return stack_address(s.destination, s.change, s.sum)
+	return stack_address(s.Destination, s.Change, s.Sum)
 }
 
-func LoadCommit(commit Commit) {
-	miner_mine_commit(commit.commit, commit.tag)
+func GetCommitCount() uint32 {
+	return uint32(len(commits))
 }
 
-func UnloadCommit(commit Commit) {
-	miner_unmine_commit(commit.commit, commit.tag)
+func GetHeight() uint64 {
+	return height_view()
 }
 
-func FinishBlock() {
-	miner_finish_block()
-}
+var modify_mutex sync.Mutex
 
-func BlockLoadCommits(commits []Commit) {
-	for _, c := range commits {
-		LoadCommit(c)
+func LoadBlock(height uint64, commits []Commit) (err error) {
+	modify_mutex.Lock()
+	defer modify_mutex.Unlock()
+	if GetHeight() != 0 && height < GetHeight() {
+		return errors.New("error cannot load buried block")
 	}
-	FinishBlock()
+	var commitnum int64 = -1
+	var thiscommitnum int64
+	for _, c := range commits {
+		if c.Tag.Height != height {
+			return errors.New("error commit height different to block height")
+		}
+		thiscommitnum = int64(c.Tag.Commitnum)
+		if thiscommitnum < commitnum {
+			return errors.New("error commits are not sequential")
+		}
+		if thiscommitnum == commitnum {
+			return errors.New("error commit has a duplicate")
+		}
+		commitnum = thiscommitnum
+
+		miner_mine_commit(c.Commit, c.Tag)
+	}
+	miner_mine_block()
+	return nil
+}
+
+func UnloadBlock() (err error) {
+	modify_mutex.Lock()
+	defer modify_mutex.Unlock()
+	for commit, tag := range commits {
+		if tag.Height == commit_current_height {
+			miner_unmine_commit(commit, tag)
+		}
+	}
+	miner_unmine_block()
+	return nil
+}
+
+func GetCommitDifference() []Commit {
+	return commit_diff
 }
 
 func CommitAddress(a [32]byte) [32]byte {
@@ -110,50 +146,55 @@ func CommitAddress(a [32]byte) [32]byte {
 }
 
 func GenerateDecider() (d Decider) {
-	d.private = purse_generate_decider()
+	d.Private = purse_generate_decider()
 	return d
 }
 
+func LoadDecider(d Decider) [32]byte {
+	return purse_load_decider(d.Private)
+}
+
 func ComputeShortDecider(d Decider) (s ShortDecider) {
-	s.public = purse_compute_short_decider(d.private)
+	s.Public = purse_compute_short_decider(d.Private)
 	return s
 }
 
 func SignDecider(d Decider, number uint16) (l LongDecider) {
-	l.signature = purse_sign_decider(d.private, number)
+	l.Signature = purse_sign_decider(d.Private, number)
 	return l
 }
 
 func ConstructContract(tree [65536][32]byte, s ShortDecider) (c Contract) {
-	c.short = s.public
-	c.root = merkle_compute_root(tree)
+	c.Short = s.Public
+	c.Root = merkle_compute_root(tree)
 	return c
 }
 
 func ComputeContractAddress(c Contract) (contract_address [32]byte) {
-	var short_address [32]byte = purse_compute_short_address(c.short, c.next)
-	contract_address = contract_compute_address(short_address, c.root)
+	var short_address [32]byte = purse_compute_short_address(c.Short, c.Next)
+	contract_address = contract_compute_address(short_address, c.Root)
 	return contract_address
 }
 
 func DecideContract(c Contract, l LongDecider, tree [65536][32]byte) (m MerkleSegment) {
 	var number uint16
 	var ok bool
-	if number, ok = purse_recover_signed_number(c.short, l.signature); !ok {
+	if number, ok = purse_recover_signed_number(c.Short, l.Signature); !ok {
 		log("error long decider does not decide this contract")
 		return m
 	}
 
-	m.short = c.short
-	m.next = c.next
-	m.long = l.signature
-	_, m.branches, m.leaf = merkle_traverse_tree(tree, number)
+	m.Short = c.Short
+	m.Next = c.Next
+	m.Long = l.Signature
+	_, m.Branches, m.Leaf = merkle_traverse_tree(tree, number)
 	return m
 }
 
-func LoadMerkleSegment(m MerkleSegment) {
-	var short_address [32]byte = purse_compute_short_address(m.short, m.next)
-	notify_transaction(m.next, short_address, m.short[0], m.short[1], m.long[0], m.long[1], m.branches, m.leaf)
+func LoadMerkleSegment(m MerkleSegment) [32]byte {
+	var short_address [32]byte = purse_compute_short_address(m.Short, m.Next)
+	_, address := notify_transaction(m.Next, short_address, m.Short[0], m.Short[1], m.Long[0], m.Long[1], m.Branches, m.Leaf)
+	return address
 }
 
 func ResetCOMB() {
