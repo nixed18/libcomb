@@ -2,6 +2,7 @@ package libcomb
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 )
 
@@ -88,8 +89,28 @@ func GetStackAddress(s Stack) [32]byte {
 	return stack_address(s.Destination, s.Change, s.Sum)
 }
 
-func GetCommitCount() uint32 {
-	return uint32(len(commits))
+func GetCOMBBase(height uint64) (commit [32]byte, err error) {
+	commits_mutex.Lock()
+	defer commits_mutex.Unlock()
+	if commit, ok := combbase_height[height]; ok {
+		return commit, nil
+	} else {
+		return commit, fmt.Errorf("no combbase at height %d", height)
+	}
+}
+
+func HaveCommit(commit [32]byte) bool {
+	commits_mutex.Lock()
+	_, ok := commits[commit]
+	commits_mutex.Unlock()
+	return ok
+}
+
+func GetCommitCount() (l uint64) {
+	commits_mutex.Lock()
+	l = uint64(len(commits))
+	commits_mutex.Unlock()
+	return l
 }
 
 func GetHeight() uint64 {

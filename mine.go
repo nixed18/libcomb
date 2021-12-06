@@ -8,6 +8,7 @@ var commits_mutex sync.RWMutex
 
 var commits map[[32]byte]UTXOtag
 var combbases map[[32]byte]struct{}
+var combbase_height map[uint64][32]byte
 
 var commit_cache_mutex sync.Mutex
 
@@ -23,6 +24,7 @@ func mine_reset() {
 
 	commits = make(map[[32]byte]UTXOtag)
 	combbases = make(map[[32]byte]struct{})
+	combbase_height = make(map[uint64][32]byte)
 	commit_current_height = 0
 	commit_cache = nil
 	commit_cache_tags = nil
@@ -131,6 +133,7 @@ func miner_mine_block() {
 		if _, ok := commits[c]; !ok {
 			segments_coinbase_mine(c, commit_cache_tags[i].Height)
 			combbases[c] = struct{}{}
+			combbase_height[commit_cache_tags[i].Height] = c
 			break
 		}
 	}
@@ -188,6 +191,7 @@ func miner_unmine_block() {
 			if _, ok = combbases[commit_cache[i]]; ok {
 
 				segments_coinbase_unmine(commit_cache[i], bheight)
+				delete(combbase_height, bheight)
 				delete(combbases, commit_cache[i])
 
 			}
