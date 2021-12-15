@@ -123,7 +123,7 @@ func miner_trickle_cache_leg(iter int, tx *[32]byte) bool {
 	return true
 }
 
-func miner_mine_block() {
+func miner_mine_block(height uint64) {
 	commit_cache_mutex.Lock()
 	commits_mutex.Lock()
 	commit_diff = nil
@@ -156,9 +156,7 @@ func miner_mine_block() {
 	}
 
 	//update the current height
-	if len(commit_cache) != 0 {
-		commit_current_height = commit_cache_tags[0].Height
-	}
+	commit_current_height = height
 
 	commit_cache = nil
 	commit_cache_tags = nil

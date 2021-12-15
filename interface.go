@@ -11,15 +11,37 @@ type WalletKey struct {
 	Private [21][32]byte
 }
 
+func (w WalletKey) Export() (out string) {
+	out = "/wallet/data/"
+	for _, k := range w.Private {
+		out += fmt.Sprintf("%X", k)
+	}
+	return out
+}
+
 type Stack struct {
 	Destination [32]byte
 	Sum         uint64
 	Change      [32]byte
 }
 
+func (s Stack) Export() (out string) {
+	var raw = stack_encode(s.Destination, s.Change, s.Sum)
+	out = fmt.Sprintf("/stack/data/%X", raw)
+	return out
+}
+
 type Transaction struct {
 	Source      [32]byte
 	Destination [32]byte
+}
+
+func (tx Transaction) Export(signature [21][32]byte) (out string) {
+	out = fmt.Sprintf("/tx/recv/%X%X", tx.Source, tx.Destination)
+	for _, k := range signature {
+		out += fmt.Sprintf("%X", k)
+	}
+	return out
 }
 
 type Commit struct {
@@ -29,6 +51,11 @@ type Commit struct {
 
 type Decider struct {
 	Private [2][32]byte
+}
+
+func (d Decider) Export(next [32]byte) (out string) {
+	out = fmt.Sprintf("/purse/data/%X%X%X", next, d.Private[0], d.Private[1])
+	return out
 }
 
 type ShortDecider struct {
@@ -47,10 +74,24 @@ type MerkleSegment struct {
 	Next     [32]byte
 }
 
+func (m MerkleSegment) Export() (out string) {
+	out = fmt.Sprintf("/merkle/data/%X%X%X%X", m.Short[0], m.Short[1], m.Long[0], m.Long[1])
+	for b, _ := range m.Branches {
+		out += fmt.Sprintf("%X", b)
+	}
+	out += fmt.Sprintf("%X%X", m.Leaf, m.Next)
+	return out
+}
+
 type Contract struct {
 	Short [2][32]byte
 	Next  [32]byte
 	Root  [32]byte
+}
+
+type Block struct {
+	Height  uint64
+	Commits []Commit
 }
 
 func ComputeWalletKey(key [21][32]byte) (w WalletKey) {
@@ -119,30 +160,28 @@ func GetHeight() uint64 {
 
 var modify_mutex sync.Mutex
 
-func LoadBlock(height uint64, commits []Commit) (err error) {
+func LoadBlock(block Block) (err error) {
 	modify_mutex.Lock()
 	defer modify_mutex.Unlock()
-	if GetHeight() != 0 && height < GetHeight() {
-		return errors.New("error cannot load buried block")
+	if GetHeight() != 0 && block.Height != GetHeight()+1 {
+		return fmt.Errorf("error blocks must be sequential %d != %d", block.Height, GetHeight())
 	}
 	var commitnum int64 = -1
 	var thiscommitnum int64
-	for _, c := range commits {
-		if c.Tag.Height != height {
+	for _, c := range block.Commits {
+		if c.Tag.Height != block.Height {
 			return errors.New("error commit height different to block height")
 		}
 		thiscommitnum = int64(c.Tag.Commitnum)
-		if thiscommitnum < commitnum {
+		if thiscommitnum != commitnum+1 {
 			return errors.New("error commits are not sequential")
 		}
-		if thiscommitnum == commitnum {
-			return errors.New("error commit has a duplicate")
-		}
 		commitnum = thiscommitnum
-
+	}
+	for _, c := range block.Commits {
 		miner_mine_commit(c.Commit, c.Tag)
 	}
-	miner_mine_block()
+	miner_mine_block(block.Height)
 	return nil
 }
 

@@ -1,6 +1,9 @@
 package libcomb
 
-import "sync"
+import (
+	"fmt"
+	"sync"
+)
 
 type balance = uint64
 
@@ -58,6 +61,9 @@ func balance_create_loop(where_node [32]byte) {
 func balance_create_coinbase(where_node [32]byte, sum uint64) {
 	balance_mutex.Lock()
 
+	if fmt.Sprintf("%X", where_node) == "875860200A9EB83562FBC1F474F45F0EF80B61054BAE608DAB84F7CEAD2BE6A4" {
+		fmt.Printf("haha\n")
+	}
 	balance_node[where_node] += sum
 
 	balance_mutex.Unlock()
@@ -163,11 +169,28 @@ func balance_split_if_enough(from [32]byte, to [32]byte, tobal [32]byte, bal bal
 }
 
 func balance_read(key [32]byte) (b balance) {
+	fmt.Printf("get bal")
 	balance_mutex.RLock()
 	b = 0
 	if bal, ok := balance_node[key]; ok {
 		b = bal
 	}
 	balance_mutex.RUnlock()
+
+	return b
+
+	commits_mutex.RLock()
+	basetag, is_commited := commits[key]
+	if is_commited {
+		fmt.Printf("commited")
+		if _, ok := combbases[key]; ok {
+			fmt.Printf("based")
+			var btag = basetag
+			var bheight = uint64(btag.Height)
+			b += Coinbase(bheight)
+		}
+	}
+	commits_mutex.RUnlock()
+
 	return b
 }

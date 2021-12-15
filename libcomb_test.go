@@ -13,6 +13,28 @@ func init() {
 var block_mutex sync.RWMutex //mining seperate blocks concurrently is not supported
 var height uint64 = 1
 
+func TestOutput(t *testing.T) {
+	var myKey [32]byte = hex2byte32([]byte("5b87914dd5dafe0915da195f0eedc3ddb636e5075163b8f9ffecbce6e62600e2"))
+	var yourKey [32]byte = hex2byte32([]byte("0232c6089bcc9af41fb82c89262996da170aa1686dcb8228c1fc17bf93151c95"))
+	var emptyKey [32]byte
+
+	var myDecider = GenerateDecider()
+	fmt.Printf("decider: %s\n", myDecider.Export(emptyKey))
+
+	var myShortDecider = ComputeShortDecider(myDecider)
+
+	var contractTree [65536][32]byte
+	contractTree[0] = myKey
+	contractTree[1] = yourKey
+
+	var contract = ConstructContract(contractTree, myShortDecider)
+	var contractAddress = ComputeContractAddress(contract)
+	fmt.Printf("contract: %X\n", contractAddress)
+
+	var myLongDecider = SignDecider(myDecider, 1)
+	var merkleSegment = DecideContract(contract, myLongDecider, contractTree)
+	fmt.Printf("segment: %s\n", merkleSegment.Export())
+}
 func TestMining(t *testing.T) {
 	var err error
 	fmt.Println("MINING TEST START")
