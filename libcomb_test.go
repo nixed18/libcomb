@@ -38,9 +38,9 @@ func TestOutput(t *testing.T) {
 func TestMining(t *testing.T) {
 	var err error
 	fmt.Println("MINING TEST START")
-	var myKey WalletKey = GenerateWalletKey()
-	var myOtherKey WalletKey = GenerateWalletKey()
-	var yourKey WalletKey = GenerateWalletKey()
+	var myKey Key = GenerateKey()
+	var myOtherKey Key = GenerateKey()
+	var yourKey Key = GenerateKey()
 
 	block_mutex.Lock()
 	var c Commit
@@ -54,7 +54,7 @@ func TestMining(t *testing.T) {
 	height++
 	block_mutex.Unlock()
 
-	LoadWalletKey(myKey)
+	LoadKey(myKey)
 
 	if GetAddressBalance(myKey.Public) == 0 {
 		t.Error("coinbase error")
@@ -109,10 +109,10 @@ func TestMining(t *testing.T) {
 
 func TestMerkle(t *testing.T) {
 	fmt.Println("MERKLE TEST START")
-	var myKey WalletKey = GenerateWalletKey()
-	var myOtherKey WalletKey = GenerateWalletKey()
-	var yourKey WalletKey = GenerateWalletKey()
-	LoadWalletKey(myKey)
+	var myKey Key = GenerateKey()
+	var myOtherKey Key = GenerateKey()
+	var yourKey Key = GenerateKey()
+	LoadKey(myKey)
 
 	block_mutex.Lock()
 	var c Commit

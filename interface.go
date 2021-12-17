@@ -6,12 +6,12 @@ import (
 	"sync"
 )
 
-type WalletKey struct {
+type Key struct {
 	Public  [32]byte
 	Private [21][32]byte
 }
 
-func (w WalletKey) Export() (out string) {
+func (w Key) Export() (out string) {
 	out = "/wallet/data/"
 	for _, k := range w.Private {
 		out += fmt.Sprintf("%X", k)
@@ -31,14 +31,19 @@ func (s Stack) Export() (out string) {
 	return out
 }
 
-type Transaction struct {
+type RawTransaction struct {
 	Source      [32]byte
 	Destination [32]byte
 }
+type Transaction struct {
+	Source      [32]byte
+	Destination [32]byte
+	Signature   [21][32]byte
+}
 
-func (tx Transaction) Export(signature [21][32]byte) (out string) {
+func (tx Transaction) Export() (out string) {
 	out = fmt.Sprintf("/tx/recv/%X%X", tx.Source, tx.Destination)
-	for _, k := range signature {
+	for _, k := range tx.Signature {
 		out += fmt.Sprintf("%X", k)
 	}
 	return out
@@ -94,13 +99,13 @@ type Block struct {
 	Commits []Commit
 }
 
-func ComputeWalletKey(key [21][32]byte) (w WalletKey) {
+func ComputeKey(key [21][32]byte) (w Key) {
 	w.Private = key
 	w.Public = wallet_compute_public_key(key)
 	return w
 }
 
-func GenerateWalletKey() (w WalletKey) {
+func GenerateKey() (w Key) {
 	w.Public, w.Private = wallet_generate_key()
 	return w
 }
@@ -109,16 +114,23 @@ func GetAddressBalance(address [32]byte) uint64 {
 	return balance_read(address)
 }
 
-func SignTransaction(tx Transaction) [21][32]byte {
-	var signature = wallet_sign_transaction(tx.Source, tx.Destination)
-	return signature
+func SignTransaction(rtx RawTransaction) (tx Transaction) {
+	tx.Source = rtx.Source
+	tx.Destination = rtx.Destination
+	tx.Signature = wallet_sign_transaction(tx.Source, tx.Destination)
+	return tx
 }
 
-func LoadTransaction(tx Transaction, signature [21][32]byte) ([32]byte, error) {
-	return transaction_load(tx.Source, tx.Destination, signature)
+func LoadTransaction(tx Transaction) ([32]byte, error) {
+	return transaction_load(tx.Source, tx.Destination, tx.Signature)
 }
 
-func LoadWalletKey(k WalletKey) [32]byte {
+func GetTXID(tx Transaction) [32]byte {
+	var raw [64]byte = transaction_raw_data(tx.Source, tx.Destination)
+	return hash256(raw[:])
+}
+
+func LoadKey(k Key) [32]byte {
 	return wallet_load_key(k.Private)
 }
 
@@ -138,6 +150,17 @@ func GetCOMBBase(height uint64) (commit [32]byte, err error) {
 	} else {
 		return commit, fmt.Errorf("no combbase at height %d", height)
 	}
+}
+
+func HaveCommits(search [][32]byte) (missing [][32]byte) {
+	commits_mutex.Lock()
+	for _, commit := range search {
+		if _, ok := commits[commit]; !ok {
+			missing = append(missing, commit)
+		}
+	}
+	commits_mutex.Unlock()
+	return missing
 }
 
 func HaveCommit(commit [32]byte) bool {
@@ -219,6 +242,13 @@ func ComputeShortDecider(d Decider) (s ShortDecider) {
 	return s
 }
 
+func ComputeDeciderAddress(d Decider) [32]byte {
+	var empty [32]byte
+	var short [2][32]byte = purse_compute_short_decider(d.Private)
+	var address [32]byte = purse_compute_short_address(short, empty)
+	return address
+}
+
 func SignDecider(d Decider, number uint16) (l LongDecider) {
 	l.Signature = purse_sign_decider(d.Private, number)
 	return l
@@ -254,6 +284,12 @@ func DecideContract(c Contract, l LongDecider, tree [65536][32]byte) (m MerkleSe
 func LoadMerkleSegment(m MerkleSegment) [32]byte {
 	var short_address [32]byte = purse_compute_short_address(m.Short, m.Next)
 	_, address := notify_transaction(m.Next, short_address, m.Short[0], m.Short[1], m.Long[0], m.Long[1], m.Branches, m.Leaf)
+	return address
+}
+
+func ComputeMerkleSegmentAddress(m MerkleSegment) [32]byte {
+	var short_address [32]byte = purse_compute_short_address(m.Short, m.Next)
+	address := merkle_compute_address(short_address, m.Short[0], m.Short[1], m.Long[0], m.Long[1], m.Branches, m.Leaf)
 	return address
 }
 

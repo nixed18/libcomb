@@ -109,6 +109,40 @@ outer:
 	return activity
 }
 
+func merkle_compute_address(short_decider, left_tip, right_tip, left_sig, right_sig [32]byte, branches [16][32]byte, leaf [32]byte) (address [32]byte) {
+	var sig int
+
+	var hash = right_sig
+	for i := 0; i < 65536; i++ {
+		if hash == right_tip {
+			sig = i
+			break
+		}
+		hash = hash256(hash[0:])
+	}
+
+	if hash != right_tip {
+		return address
+	}
+
+	hash = hash_chain(left_sig, uint16(65535-sig))
+	if hash != left_tip {
+		return address
+	}
+
+	var root = leaf
+	for i := byte(0); i < 16; i++ {
+		if ((sig >> i) & 1) == 0 {
+			root = merkle(root[0:], branches[i][0:])
+		} else {
+			root = merkle(branches[i][0:], root[0:])
+		}
+	}
+
+	address = merkle(short_decider[0:], root[0:])
+	return address
+}
+
 func notify_transaction(next, short_decider, left_tip, right_tip, left_sig, right_sig [32]byte, branches [16][32]byte, leaf [32]byte) (bool, [32]byte) {
 	var address [32]byte
 	var destination [32]byte
