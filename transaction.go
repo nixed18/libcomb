@@ -10,6 +10,17 @@ func transaction_raw_data(source, destination [32]byte) (raw [64]byte) {
 	return raw
 }
 
+func tranaction_is_active(source, destination [32]byte) bool {
+	segments_transaction_mutex.Lock()
+	defer segments_transaction_mutex.Unlock()
+	if txidandto, ok := segments_transaction_next[source]; ok {
+		if txidandto[1] == destination {
+			return true
+		}
+	}
+	return false
+}
+
 func transaction_load(source, destination [32]byte, signature [21][32]byte) (address [32]byte, err error) {
 	var txcommitsandfrom [22][32]byte
 	var txidandto [2][32]byte

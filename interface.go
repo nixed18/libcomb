@@ -114,11 +114,11 @@ func GetAddressBalance(address [32]byte) uint64 {
 	return balance_read(address)
 }
 
-func SignTransaction(rtx RawTransaction) (tx Transaction) {
+func SignTransaction(rtx RawTransaction) (tx Transaction, err error) {
 	tx.Source = rtx.Source
 	tx.Destination = rtx.Destination
-	tx.Signature = wallet_sign_transaction(tx.Source, tx.Destination)
-	return tx
+	tx.Signature, err = wallet_sign_transaction(tx.Source, tx.Destination)
+	return tx, err
 }
 
 func LoadTransaction(tx Transaction) ([32]byte, error) {
@@ -128,6 +128,10 @@ func LoadTransaction(tx Transaction) ([32]byte, error) {
 func GetTXID(tx Transaction) [32]byte {
 	var raw [64]byte = transaction_raw_data(tx.Source, tx.Destination)
 	return hash256(raw[:])
+}
+
+func IsTransactionActive(source, destination [32]byte) bool {
+	return tranaction_is_active(source, destination)
 }
 
 func LoadKey(k Key) [32]byte {

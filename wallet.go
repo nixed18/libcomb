@@ -2,6 +2,7 @@ package libcomb
 
 import (
 	"crypto/rand"
+	"fmt"
 	"sync"
 )
 
@@ -66,15 +67,15 @@ func wallet_load_key(key [21][32]byte) (public [32]byte) {
 	return public
 }
 
-func wallet_sign_transaction(source [32]byte, destination [32]byte) (signature [21][32]byte) {
+func wallet_sign_transaction(source [32]byte, destination [32]byte) (signature [21][32]byte, err error) {
 	var key [21][32]byte
 	var ok bool
 
 	wallet_mutex.RLock()
 	if key, ok = wallet[source]; !ok {
 		wallet_mutex.RUnlock()
-		logf("error signing, no such key in wallet")
-		return
+		err = fmt.Errorf("no such key in wallet")
+		return signature, err
 	}
 	wallet_mutex.RUnlock()
 
@@ -93,5 +94,5 @@ func wallet_sign_transaction(source [32]byte, destination [32]byte) (signature [
 
 	signature = hash_chains(key, depths)
 
-	return signature
+	return signature, nil
 }
