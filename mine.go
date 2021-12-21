@@ -265,13 +265,7 @@ func miner_unmine_block() {
 	commit_cache = nil
 	commit_cache_tags = nil
 
-	//update the current height
-	commit_current_height = 0
-	for _, tag := range commits {
-		if tag.Height > commit_current_height {
-			commit_current_height = tag.Height
-		}
-	}
+	commit_current_height--
 
 	resetgraph()
 

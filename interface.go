@@ -307,3 +307,14 @@ func ResetCOMB() {
 	wallet_reset()
 	resetgraph_reset()
 }
+
+func Hash(data []byte) [32]byte {
+	return hash256(data)
+}
+
+func SwitchToTestnet() {
+	if len(commits) != 0 {
+		panic("cant change network while active")
+	}
+	testnet = true
+}

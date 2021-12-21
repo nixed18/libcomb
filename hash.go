@@ -1,17 +1,12 @@
 package libcomb
 
-import ( 
-	"github.com/minio/sha256-simd"
+import (
 	"sync"
+
+	"github.com/minio/sha256-simd"
 )
 
-var hash_count uint64 //single threaded hashing (try to minimize)
-var chain_hash_count uint64 //optimized threaded hashing
-
-func hash_reset() {
-	hash_count = 0
-	chain_hash_count = 0
-}
+var testnet bool = false
 
 /*
 extracted from the rest of libcomb for optimization
@@ -62,10 +57,9 @@ func hash_chain_compare(in [32]byte, iterations uint16, tag UTXOtag) bool {
 	copy(buf[0:], whitepaper[:])
 	copy(buf[32:], hash[:])
 	for j := uint16(0); j < iterations; j++ {
-		hash = sha256.Sum256(buf[32:])
+		hash = hash256(buf[32:])
 		copy(buf[32:], hash[:])
-		var candidate, ok = commits[sha256.Sum256(buf[:])]
-		//chain_hash_count+=2
+		var candidate, ok = commits[hash256(buf[:])]
 		if !ok {
 			continue
 		}
@@ -78,13 +72,16 @@ func hash_chain_compare(in [32]byte, iterations uint16, tag UTXOtag) bool {
 
 func hash_chain(in [32]byte, iterations uint16) [32]byte {
 	for i := uint16(0); i < iterations; i++ {
-		in = sha256.Sum256(in[:])
-		//chain_hash_count++
+		in = hash256(in[:])
 	}
 	return in
 }
 
 func hash256(in []byte) [32]byte {
-	//hash_count++
+	if testnet {
+		var testpaper = hex2byte32([]byte("2e3841b6e75e9717ab7d2a8b57248b7f611a5473381b5e432aaf8fe88874fbfe"))
+		in = append(testpaper[:], in...)
+		in = append(testpaper[:], in...)
+	}
 	return sha256.Sum256(in)
 }

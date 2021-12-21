@@ -16,6 +16,19 @@ var ErrBadDec4 error = fmt.Errorf("Not 4byte decimal hex identifier")
 var ErrBadHexpand32 error = fmt.Errorf("Not uppercase 32byte hexpand identifier")
 var ErrBadHexpand66 error = fmt.Errorf("Not uppercase 66byte hexpand identifier")
 
+const HEXPAND_LETTER_A = 1
+const HEXPAND_LETTER_F = 2
+const HEXPAND_LETTER_G = 3
+const HEXPAND_LETTER_V = 4
+
+func hexpandLetter(id int) byte {
+	var letters []byte = []byte{'?', 'A', 'F', 'G', 'V'}
+	if testnet {
+		letters = []byte{'.', 'a', 'f', 'g', 'v'}
+	}
+	return letters[id]
+}
+
 func Hex(x byte) byte {
 	return 7*(x/10) + x + '0'
 }
@@ -45,23 +58,43 @@ func checkDEC4(b string) error {
 	return nil
 }
 
-func checkHEX(b string, length int) bool {
+func checkHEXupper(b string, length int) bool {
 	if len(b) != 2*length {
 		return false
 	}
 	for i := 0; i < 2*length; i++ {
 		if ((b[i] >= '0') && (b[i] <= '9')) || ((b[i] >= 'A') && (b[i] <= 'F')) {
 		} else {
+
 			return false
 		}
 	}
 	return true
 }
-func checkHEX128(b string) error {
-	if checkHEX(b, 128) {
+func checkHEX(b string, length int) bool {
+	if len(b) != 2*length {
+		return false
+	}
+	for i := 0; i < 2*length; i++ {
+		if ((b[i] >= '0') && (b[i] <= '9')) || ((b[i] >= hexpandLetter(HEXPAND_LETTER_A)) && (b[i] <= hexpandLetter(HEXPAND_LETTER_F))) {
+		} else {
+
+			return false
+		}
+	}
+	return true
+}
+func checkHEX128upper(b string) error {
+	if checkHEXupper(b, 128) {
 		return nil
 	}
 	return ErrBadHex128
+}
+func checkHEX96upper(b string) error {
+	if checkHEXupper(b, 96) {
+		return nil
+	}
+	return ErrBadHex96
 }
 func checkHEX96(b string) error {
 	if checkHEX(b, 96) {
@@ -69,26 +102,26 @@ func checkHEX96(b string) error {
 	}
 	return ErrBadHex96
 }
-func checkHEX72(b string) error {
-	if checkHEX(b, 72) {
+func checkHEX72upper(b string) error {
+	if checkHEXupper(b, 72) {
 		return nil
 	}
 	return ErrBadHex72
 }
-func checkHEX704(b string) error {
-	if checkHEX(b, 704) {
+func checkHEX704upper(b string) error {
+	if checkHEXupper(b, 704) {
 		return nil
 	}
 	return ErrBadHex704
 }
-func checkHEX736(b string) error {
-	if checkHEX(b, 736) {
+func checkHEX736upper(b string) error {
+	if checkHEXupper(b, 736) {
 		return nil
 	}
 	return ErrBadHex736
 }
-func checkHEX672(b string) error {
-	if checkHEX(b, 672) {
+func checkHEX672upper(b string) error {
+	if checkHEXupper(b, 672) {
 		return nil
 	}
 	return ErrBadHex672
@@ -99,14 +132,20 @@ func checkHEX32(b string) error {
 	}
 	return ErrBadHex32
 }
-func checkHEX2(b string) error {
-	if checkHEX(b, 2) {
+func checkHEX32upper(b string) error {
+	if checkHEXupper(b, 32) {
+		return nil
+	}
+	return ErrBadHex32
+}
+func checkHEX2upper(b string) error {
+	if checkHEXupper(b, 2) {
 		return nil
 	}
 	return ErrBadHex2
 }
-func checkHEX8(b string) error {
-	if checkHEX(b, 8) {
+func checkHEX8upper(b string) error {
+	if checkHEXupper(b, 8) {
 		return nil
 	}
 	return ErrBadHex8
@@ -169,23 +208,15 @@ func hex2byte672(hex []byte) (out [672]byte) {
 	}
 	return out
 }
-func hex2byte(hex []byte) (out []byte) {
-	out = make([]byte, len(hex)/2)
-	for i := range out {
-		out[i] = (x2b(hex[i<<1]) << 4) | x2b(hex[i<<1|1])
-	}
-	return out
-}
-
 func x2b(hex byte) (lo byte) {
-	return [32]byte{13, 14, 15, 0, 0, 10, 11, 12, 0, 0, 0, 0, 0, 0, 0, 0, 3, 2, 1, 0, 7, 6, 5, 4, 0, 0, 9, 8, 0, 0, 0, 0}[(hex^(hex>>4))&31]
+	return (hex & 15) + 9*(hex>>6)
 }
 func checkHEXPAND(b string, length int) bool {
 	if len(b) != 2*length {
 		return false
 	}
 	for i := 0; i < 2*length; i++ {
-		if (b[i] >= 'G') && (b[i] <= 'V') {
+		if (b[i] >= hexpandLetter(HEXPAND_LETTER_G)) && (b[i] <= hexpandLetter(HEXPAND_LETTER_V)) {
 		} else {
 			return false
 		}
@@ -210,9 +241,9 @@ func Hexpand2(v []byte) (out [4]byte) {
 	}
 	for i := range out {
 		if i&1 == 1 {
-			out[i] = (v[i>>1] & 0xF) + 'G'
+			out[i] = (v[i>>1] & 0xF) + hexpandLetter(HEXPAND_LETTER_G)
 		} else {
-			out[i] = (v[i>>1] >> 4) + 'G'
+			out[i] = (v[i>>1] >> 4) + hexpandLetter(HEXPAND_LETTER_G)
 		}
 	}
 	return out
@@ -224,9 +255,9 @@ func Hexpand32(v []byte) (out [64]byte) {
 	}
 	for i := range out {
 		if i&1 == 1 {
-			out[i] = (v[i>>1] & 0xF) + 'G'
+			out[i] = (v[i>>1] & 0xF) + hexpandLetter(HEXPAND_LETTER_G)
 		} else {
-			out[i] = (v[i>>1] >> 4) + 'G'
+			out[i] = (v[i>>1] >> 4) + hexpandLetter(HEXPAND_LETTER_G)
 		}
 	}
 	return out
@@ -234,21 +265,21 @@ func Hexpand32(v []byte) (out [64]byte) {
 
 func hexpand2byte32(hexpand []byte) (out [32]byte) {
 	for i := range out {
-		out[i] = 16*(hexpand[2*i]-'G') + (hexpand[2*i+1] - 'G')
+		out[i] = 16*(hexpand[2*i]-hexpandLetter(HEXPAND_LETTER_G)) + (hexpand[2*i+1] - hexpandLetter(HEXPAND_LETTER_G))
 	}
 	return out
 }
 
 func hexpand2byte2(hexpand []byte) (out [2]byte) {
 	for i := range out {
-		out[i] = 16*(hexpand[2*i]-'G') + (hexpand[2*i+1] - 'G')
+		out[i] = 16*(hexpand[2*i]-hexpandLetter(HEXPAND_LETTER_G)) + (hexpand[2*i+1] - hexpandLetter(HEXPAND_LETTER_G))
 	}
 	return out
 }
 
 func Unhexpand(v []byte) {
 	for i := range v {
-		v[i] -= 'G'
+		v[i] -= hexpandLetter(HEXPAND_LETTER_G)
 		v[i] = Hex(v[i])
 	}
 }
