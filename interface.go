@@ -11,24 +11,10 @@ type Key struct {
 	Private [21][32]byte
 }
 
-func (w Key) Export() (out string) {
-	out = "/wallet/data/"
-	for _, k := range w.Private {
-		out += fmt.Sprintf("%X", k)
-	}
-	return out
-}
-
 type Stack struct {
 	Destination [32]byte
 	Sum         uint64
 	Change      [32]byte
-}
-
-func (s Stack) Export() (out string) {
-	var raw = stack_encode(s.Destination, s.Change, s.Sum)
-	out = fmt.Sprintf("/stack/data/%X", raw)
-	return out
 }
 
 type RawTransaction struct {
@@ -41,14 +27,6 @@ type Transaction struct {
 	Signature   [21][32]byte
 }
 
-func (tx Transaction) Export() (out string) {
-	out = fmt.Sprintf("/tx/recv/%X%X", tx.Source, tx.Destination)
-	for _, k := range tx.Signature {
-		out += fmt.Sprintf("%X", k)
-	}
-	return out
-}
-
 type Commit struct {
 	Commit [32]byte
 	Tag    UTXOtag
@@ -56,11 +34,6 @@ type Commit struct {
 
 type Decider struct {
 	Private [2][32]byte
-}
-
-func (d Decider) Export(next [32]byte) (out string) {
-	out = fmt.Sprintf("/purse/data/%X%X%X", next, d.Private[0], d.Private[1])
-	return out
 }
 
 type ShortDecider struct {
@@ -77,15 +50,6 @@ type MerkleSegment struct {
 	Branches [16][32]byte
 	Leaf     [32]byte
 	Next     [32]byte
-}
-
-func (m MerkleSegment) Export() (out string) {
-	out = fmt.Sprintf("/merkle/data/%X%X%X%X", m.Short[0], m.Short[1], m.Long[0], m.Long[1])
-	for b, _ := range m.Branches {
-		out += fmt.Sprintf("%X", b)
-	}
-	out += fmt.Sprintf("%X%X", m.Leaf, m.Next)
-	return out
 }
 
 type Contract struct {
