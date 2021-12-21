@@ -79,9 +79,8 @@ func hash_chain(in [32]byte, iterations uint16) [32]byte {
 
 func hash256(in []byte) [32]byte {
 	if testnet {
-		var testpaper = hex2byte32([]byte("2e3841b6e75e9717ab7d2a8b57248b7f611a5473381b5e432aaf8fe88874fbfe"))
-		in = append(testpaper[:], in...)
-		in = append(testpaper[:], in...)
+		in = append(testnet_whitepaper[:], in...)
+		in = append(testnet_whitepaper[:], in...)
 	}
 	return sha256.Sum256(in)
 }

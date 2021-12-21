@@ -3,7 +3,6 @@ package libcomb
 import (
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 )
 
@@ -318,28 +317,4 @@ func SwitchToTestnet() {
 		panic("cant change network while active")
 	}
 	testnet = true
-}
-
-func ParseHex(hex string) (raw [32]byte, err error) {
-	if len(hex) < 64 {
-		err = errors.New("hex too short")
-		return raw, err
-	}
-	if len(hex) > 64 {
-		err = errors.New("hex too long")
-		return raw, err
-	}
-
-	hex = strings.ToUpper(hex)
-
-	if err = checkHEX32(hex); err != nil {
-		return raw, err
-	}
-
-	raw = hex2byte32([]byte(hex))
-	return raw, nil
-}
-
-func ParseHexSlice(hex []byte) []byte {
-	return hex2byte(hex)
 }
