@@ -208,6 +208,15 @@ func hex2byte672(hex []byte) (out [672]byte) {
 	}
 	return out
 }
+
+func hex2byte(hex []byte) (out []byte) {
+	out = make([]byte, len(hex)/2)
+	for i := range out {
+		out[i] = (x2b(hex[i<<1]) << 4) | x2b(hex[i<<1|1])
+	}
+	return out
+}
+
 func x2b(hex byte) (lo byte) {
 	return (hex & 15) + 9*(hex>>6)
 }
