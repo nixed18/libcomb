@@ -1,5 +1,0 @@
-package libcomb
-
-func main() {
-
-}

@@ -1,295 +1,98 @@
 package libcomb
 
-func merkle_mine(c [32]byte) {
-	segments_merkle_mutex.Lock()
+import (
+	"fmt"
+	"log"
+)
 
-	merkledata_each_segments_merkle_target(c, func(e0 *[32]byte) bool {
-		var e [2][32]byte
-		e[0] = *e0
+type UnsignedMerkleSegment struct {
+	Tips [2][32]byte
+	Next [32]byte
+	Root [32]byte
+}
 
-		var e0q = merkle(e[0][0:], c[0:])
+func (m UnsignedMerkleSegment) ID() [32]byte {
+	return Hash256Adjacent(Hash256Concat32([][32]byte{m.Next, m.Tips[0], m.Tips[1]}), m.Root)
+}
 
-		//logf("e0q=%X\n", e0q)
+func (m UnsignedMerkleSegment) trigger() (err error) {
+	return nil
+}
 
-		e[1] = segments_merkle_lever[e0q]
+func (m UnsignedMerkleSegment) triggers() [][32]byte {
+	return nil
+}
 
-		var tx = merkle(e[0][0:], e[1][0:])
+func unsigned_merkle_segment_lookup(id [32]byte) (UnsignedMerkleSegment, error) {
+	var u UnsignedMerkleSegment
+	if c, ok := constructs[id]; ok {
+		if u, ok = c.(UnsignedMerkleSegment); !ok {
+			return u, fmt.Errorf("not an unsigned merkle segment")
+		}
+	} else {
+		return u, fmt.Errorf("not a construct")
+	}
 
-		//logf("mine tx=%X\n", tx)
+	return u, nil
+}
 
-		segments_merkle_mutex.Unlock()
-		reactivate(tx, e)
-		segments_merkle_mutex.Lock()
+type MerkleSegment struct {
+	Tips      [2][32]byte
+	Signature [2][32]byte
+	Branches  [16][32]byte
+	Leaf      [32]byte
+	Next      [32]byte
 
+	Root [32]byte
+	id   [32]byte
+}
+
+func (m MerkleSegment) ID() [32]byte {
+	if m.id == [32]byte{} {
+		log.Panicf("merkle segment has not been recovered")
+	}
+	return m.id
+}
+
+func (m MerkleSegment) Active() bool {
+	if _, ok := balance_edge[m.id]; ok {
 		return true
-	})
-	segments_merkle_mutex.Unlock()
-}
-
-func merkle_unmine(c [32]byte) {
-	segments_merkle_mutex.Lock()
-	merkledata_each_segments_merkle_target(c, func(e0 *[32]byte) bool {
-
-		var e [2][32]byte
-		e[0] = *e0
-		e[1] = segments_merkle_next[e[0]]
-		var tx = merkle(e[0][0:], e[1][0:])
-
-		//logf("unmine tx=%X\n", tx)
-
-		segments_merkle_mutex.Unlock()
-		reactivate(tx, e)
-		segments_merkle_mutex.Lock()
-		return true
-	})
-	segments_merkle_mutex.Unlock()
-}
-
-func merkle_scan_leg_activity(tx [32]byte) (activity uint8) {
-
-	var data [4][32]byte
-
-	segments_merkle_mutex.RLock()
-
-	if data1, ok1 := segments_merkle_blackheart[tx]; ok1 {
-		data = data1
-	} else if data2, ok2 := segments_merkle_whiteheart[tx]; ok2 {
-		data = data2
-	} else {
-		segments_merkle_mutex.RUnlock()
-
-		//println("no heart")
-		return 0
 	}
+	return false
+}
 
-	segments_merkle_mutex.RUnlock()
-
-	var j = 0
-outer:
-	for i := 0; i < 2; i++ {
-
-		var rawroottag, ok2 = commits[commit(data[i][0:])]
-
-		if !ok2 {
-			continue
+func (m MerkleSegment) trigger() (err error) {
+	var ok bool
+	var tag Tag
+	var leg Tag
+	for i := range m.Signature {
+		//check signature is committed
+		if tag, ok = commits[commit(m.Signature[i])]; !ok {
+			return fmt.Errorf("signature %d not committed", i)
 		}
 
-		var roottag = rawroottag
-
-		var hash = data[i]
-
-		for ; j < 65536; j++ {
-			hash = hash256(hash[0:])
-			if hash == data[i+2] {
-				j++
-				break
+		//check leg for older signatures
+		var hash = m.Signature[i]
+		for hash != m.Tips[i] {
+			hash = Hash256(hash[:])
+			if leg, ok = commits[commit(hash)]; ok {
+				if compare(leg, tag) > 0 {
+					return fmt.Errorf("older decision on leg %d", i)
+				}
 			}
-
-			var candidaterawtag, ok3 = commits[commit(hash[0:])]
-
-			if !ok3 {
-				continue
-			}
-			var candidatetag = candidaterawtag
-
-			if utag_cmp(&roottag, &candidatetag) > 0 {
-
-				//log("miscompared hash=", hash)
-
-				//panic("")
-
-				continue outer
-			}
-
 		}
-		//log("solved activity", hash)
-		activity |= 1 << uint(i)
 	}
-	//log("activity, j", activity, j)
-	return activity
+
+	balance_redirect(m.ID(), m.Leaf)
+	fmt.Println("merkle activated")
+	return nil
 }
 
-func merkle_compute_address(short_decider, left_tip, right_tip, left_sig, right_sig [32]byte, branches [16][32]byte, leaf [32]byte) (address [32]byte) {
-	var sig int
-
-	var hash = right_sig
-	for i := 0; i < 65536; i++ {
-		if hash == right_tip {
-			sig = i
-			break
-		}
-		hash = hash256(hash[0:])
+func (m MerkleSegment) triggers() (t [][32]byte) {
+	for _, s := range m.Signature {
+		t = append(t, commit(s))
 	}
-
-	if hash != right_tip {
-		return address
-	}
-
-	hash = hash_chain(left_sig, uint16(65535-sig))
-	if hash != left_tip {
-		return address
-	}
-
-	var root = leaf
-	for i := byte(0); i < 16; i++ {
-		if ((sig >> i) & 1) == 0 {
-			root = merkle(root[0:], branches[i][0:])
-		} else {
-			root = merkle(branches[i][0:], root[0:])
-		}
-	}
-
-	address = merkle(short_decider[0:], root[0:])
-	return address
-}
-
-func notify_transaction(next, short_decider, left_tip, right_tip, left_sig, right_sig [32]byte, branches [16][32]byte, leaf [32]byte) (bool, [32]byte) {
-	var address [32]byte
-	var destination [32]byte
-
-	//are we at the bottom of our tree?
-	var next_is_zero = next == address //zeros
-
-	var sig int
-
-	//recover signature from right_sig and right_tip
-	var hash = right_sig
-	for i := 0; i < 65536; i++ {
-		if hash == right_tip {
-			sig = i
-			break
-		}
-		hash = hash256(hash[0:])
-	}
-
-	//no signature was found!
-	if hash != right_tip {
-		logf("error merkle signature invalid")
-		return false, [32]byte{}
-	}
-
-	//verify right side matches signature
-	hash = hash_chain(left_sig, uint16(65535-sig))
-	if hash != left_tip {
-		logf("error signature is inconsistent")
-		return false, [32]byte{}
-	}
-
-	//recover merkle root from signature, leaf, branches (branches are proof)
-	var root = leaf
-	for i := byte(0); i < 16; i++ {
-		if ((sig >> i) & 1) == 0 {
-			root = merkle(root[0:], branches[i][0:])
-		} else {
-			root = merkle(branches[i][0:], root[0:])
-		}
-	}
-
-	//recover contract address (or more generically, the merkle segment address)
-	address = merkle(short_decider[0:], root[0:])
-
-	//map: commit -> address (for later confirmation etc)
-	var left_commit = commit(left_sig[0:])
-	var right_commit = commit(right_sig[0:])
-	segments_merkle_mutex.Lock()
-	segments_merkle_uncommit[commit(address[0:])] = address
-	merkledata_store_segments_merkle_target(left_commit, address)
-	merkledata_store_segments_merkle_target(right_commit, address)
-
-	//for multi-level trees the destination is another segment, otherwise the leaf
-	if next_is_zero {
-		destination = leaf
-	} else {
-		destination = merkle(next[0:], leaf[0:]) //actually hash(short_decider, merkle_root) = address
-	}
-
-	//construct the txid (also called the heart) (because this is a transaction!)
-	var tx = merkle(address[0:], destination[0:])
-
-	//map the transaction to the signature
-	if next_is_zero {
-		//different maps depending on if this is the bottom? idk why
-		segments_merkle_whiteheart[tx] = [4][32]byte{left_sig, right_sig, left_tip, right_tip}
-	} else {
-		segments_merkle_blackheart[tx] = [4][32]byte{left_sig, right_sig, left_tip, right_tip}
-	}
-
-	//now map: commit + address -> desination
-	//used to correlate new commits to this segment like so:
-	//	commit -> address, then commit + address -> desitnation, then heart/txid = hash(address, destination)
-	//why two steps? because one decider can decide many segments!
-	var address_left_sig = merkle(address[0:], left_commit[0:])
-	var address_right_sig = merkle(address[0:], right_commit[0:])
-	segments_merkle_lever[address_left_sig] = destination
-	segments_merkle_lever[address_right_sig] = destination
-	segments_merkle_mutex.Unlock()
-
-	//finally trickle the merkle segment if its confirmed already
-	commits_mutex.Lock()
-	reactivate(tx, [2][32]byte{address, destination})
-	commits_mutex.Unlock()
-	return true, address
-}
-
-func reactivate(tx [32]byte, e [2][32]byte) {
-	var oldactivity = segments_merkle_activity[tx]
-	var newactivity = merkle_scan_leg_activity(tx)
-	segments_merkle_activity[tx] = newactivity
-
-	if oldactivity != newactivity {
-		if oldactivity == 3 {
-			//var maybecoinbase = commit(e[0][0:])
-
-			segments_merkle_untrickle(nil, e[0], 0xffffffffffffffff)
-			//segments_coinbase_untrickle_auto(maybecoinbase, e[0])
-
-			segments_merkle_mutex.Lock()
-			delete(segments_merkle_next, e[0])
-			segments_merkle_mutex.Unlock()
-		}
-		if newactivity == 3 {
-			segments_merkle_mutex.Lock()
-			if _, ok1 := segments_merkle_next[e[0]]; ok1 {
-				log("Panic: e0 to e1 already have live path")
-				panic("")
-			}
-
-			segments_merkle_next[e[0]] = e[1]
-			segments_merkle_mutex.Unlock()
-			var maybecoinbase = commit(e[0][0:])
-			if _, ok1 := combbases[maybecoinbase]; ok1 {
-				segments_coinbase_trickle_auto(maybecoinbase, e[0])
-			}
-
-			segments_merkle_trickle(make(map[[32]byte]struct{}), e[0])
-		}
-	}
-}
-
-func merkledata_each_segments_merkle_target(source [32]byte, eacher func(*[32]byte) bool) {
-	var iter = source
-
-	for {
-		hash_seq_next(&iter)
-		var maybedata, ok = segments_merkle_target[iter]
-
-		if !ok {
-			return
-		}
-
-		if !eacher(&maybedata) {
-			return
-		}
-	}
-}
-
-func merkle_compute_root(tree [65536][32]byte) [32]byte {
-	for j := 0; j < 16; j++ {
-		for i := 0; i < 1<<uint(15-j); i++ {
-			tree[i] = merkle(tree[2*i][0:], tree[2*i+1][0:])
-		}
-	}
-	return tree[0]
+	return t
 }
 
 func merkle_traverse_tree(tree [65536][32]byte, number uint16) (root [32]byte, branches [16][32]byte, leaf [32]byte) {
@@ -297,10 +100,105 @@ func merkle_traverse_tree(tree [65536][32]byte, number uint16) (root [32]byte, b
 	for j := 0; j < 16; j++ {
 		branches[j] = tree[number^1]
 		for i := 0; i < 1<<uint(15-j); i++ {
-			tree[i] = merkle(tree[2*i][0:], tree[2*i+1][0:])
+			tree[i] = Hash256Adjacent(tree[2*i], tree[2*i+1])
 		}
 		number >>= 1
 	}
 	root = tree[0]
 	return root, branches, leaf
+}
+
+func merkle_recover(m *MerkleSegment) (err error) {
+	var number uint16
+	var link [32]byte
+
+	//recover number from signature and tips
+	if number, err = merkle_recover_number(m); err != nil {
+		return err
+	}
+
+	//recover merkle root from leaf + branches + number
+	m.Root = m.Leaf
+	for i := byte(0); i < 16; i++ {
+		if ((number >> i) & 1) == 0 {
+			m.Root = Hash256Adjacent(m.Root, m.Branches[i])
+		} else {
+			m.Root = Hash256Adjacent(m.Branches[i], m.Root)
+		}
+	}
+
+	//recover decider link from tips + next
+	var data [3][32]byte = [3][32]byte{m.Next, m.Tips[0], m.Tips[1]}
+	link = Hash256Concat32(data[:])
+
+	m.id = Hash256Adjacent(link, m.Root)
+
+	return nil
+}
+
+func merkle_recover_number(m *MerkleSegment) (number uint16, err error) {
+	var hash = m.Signature[1]
+	for i := uint16(0); i < 65535; i++ {
+		if hash == m.Tips[1] {
+			number = i
+			break
+		}
+		hash = Hash256(hash[0:])
+	}
+
+	if hash != m.Tips[1] {
+		return 0, fmt.Errorf("invalid signature")
+	}
+
+	hash = m.Signature[0]
+	for i := uint16(0); i < uint16(65535-number); i++ {
+		hash = Hash256(hash[:])
+	}
+
+	if hash != m.Tips[0] {
+		return 0, fmt.Errorf("mismatched signature")
+	}
+
+	return number, nil
+}
+
+func merkle_recover_from_tree(m *MerkleSegment, tree [65536][32]byte) (err error) {
+	var number uint16
+	var link [32]byte
+
+	//recover number from signature and tips
+	if number, err = merkle_recover_number(m); err != nil {
+		return err
+	}
+
+	//recover root, branches and leaf from tree + number
+	m.Root, m.Branches, m.Leaf = merkle_traverse_tree(tree, number)
+
+	//recover decider link from tips + next
+	var data [3][32]byte
+	data[0] = m.Next
+	data[1] = m.Tips[0]
+	data[2] = m.Tips[1]
+	link = Hash256Concat32(data[:])
+
+	m.id = Hash256Adjacent(link, m.Root)
+	return nil
+}
+
+func merkle_compute_address(link, root [32]byte) [32]byte {
+	return Hash256Adjacent(link, root)
+}
+
+func merkle_compare(a MerkleSegment, b MerkleSegment) bool {
+	if a.ID() != b.ID() {
+		return false
+	}
+	//ID doesnt uniquely identify a signed Merkle Segment, need to check destination etc
+
+	var out bool = true
+	out = out && (a.Leaf == b.Leaf)
+	out = out && (a.Branches == b.Branches)
+	out = out && (a.Signature == b.Signature)
+
+	return out
 }

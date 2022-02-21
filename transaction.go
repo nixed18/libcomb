@@ -1,245 +1,97 @@
 package libcomb
 
 import (
-	"errors"
+	"fmt"
 )
 
-func transaction_raw_data(source, destination [32]byte) (raw [64]byte) {
-	copy(raw[0:], source[0:])
-	copy(raw[32:], destination[0:])
-	return raw
+type Transaction struct {
+	Source      [32]byte
+	Destination [32]byte
+	Signature   [21][32]byte
 }
 
-func tranaction_is_active(source, destination [32]byte) bool {
-	segments_transaction_mutex.Lock()
-	defer segments_transaction_mutex.Unlock()
-	if txidandto, ok := segments_transaction_next[source]; ok {
-		if txidandto[1] == destination {
-			return true
-		}
+func (tx Transaction) ID() [32]byte {
+	return Hash256Adjacent(tx.Source, tx.Destination)
+}
+
+func (tx Transaction) Active() bool {
+	if _, ok := balance_edge[tx.Source]; ok {
+		return true
 	}
 	return false
 }
 
-func transaction_load(source, destination [32]byte, signature [21][32]byte) (address [32]byte, err error) {
-	var txcommitsandfrom [22][32]byte
-	var txidandto [2][32]byte
-	var txraw = transaction_raw_data(source, destination)
-	var txid = hash256(txraw[:])
-
-	//create our data structures
-	for j := 0; j < 21; j++ {
-		txcommitsandfrom[j] = signature[j]
+func (tx Transaction) trigger() (err error) {
+	var ok bool
+	if _, ok = balance_edge[tx.Source]; ok {
+		return //already triggered
 	}
-	txcommitsandfrom[21] = source
+	var tag Tag
+	var leg Tag
+	var id [32]byte = tx.ID()
+	var cuts = cut(id[:])
+	for i, s := range tx.Signature {
 
-	txidandto[0] = txid
-	txidandto[1] = destination
-
-	//verify signature
-	var teeth_lengths = CutCombWhere(txid[0:])
-	var data [672]byte
-
-	var tip = hash_chains(signature, teeth_lengths)
-	for i := range tip {
-		copy(data[i*32:i*32+32], tip[i][0:])
-	}
-
-	var actuallyfrom = hash256(data[:])
-
-	if actuallyfrom != source {
-		return address, errors.New("signature invalid")
-	}
-
-	commits_mutex.RLock()
-	segments_transaction_mutex.Lock()
-	segments_merkle_mutex.Lock()
-
-	//point the source commit to the source (since its usually not reversible)
-	//so we can trickle coinbases on source to the destination (or untrickle)
-	segments_transaction_uncommit[commit(source[0:])] = source
-
-	//point each signature commit to our transaction
-	//used to trickle funds when all commits are seen, or untrickle if commits are rolled back
-	for i := 0; i < 21; i++ {
-		txlegs_store_leg(commit(signature[i][0:]), txid)
-	}
-
-	//point the source to our transaction (and the destination)
-	//used to decide which destination to trickle funds, in the case of a double spends
-	if _, ok := segments_transaction_data[txid]; !ok {
-		txdoublespends_store_doublespend(source, txidandto)
-	}
-
-	segments_transaction_data[txid] = txcommitsandfrom
-
-	//check if transaction is valid (commited + not a double spend), and trickle/untrickle accordingly
-	var oldactivity = segments_transaction_activity[txid]
-	var newactivity = tx_scan_leg_activity(txid)
-
-	//logf("old %021b\nnew %021b\n", oldactivity, newactivity)
-	segments_transaction_activity[txid] = newactivity
-	if oldactivity != newactivity {
-		//there is an older transaction thats valid
-		if oldactivity == 2097151 /*0b111111111111111111111 (21 1's)*/ {
-			segments_transaction_untrickle(nil, source, 0xffffffffffffffff)
-			delete(segments_transaction_next, source)
+		//check signature is committed
+		if tag, ok = commits[commit(s)]; !ok {
+			return fmt.Errorf("signature %d not committed", i)
 		}
-		//our transaction is valid
-		if newactivity == 2097151 {
-			segments_transaction_next[source] = txidandto
-			var maybecoinbase = commit(source[0:])
-			if _, ok1 := combbases[maybecoinbase]; ok1 {
-				segments_coinbase_trickle_auto(maybecoinbase, source)
+
+		//check leg for older signatures
+		for k := uint16(0); k < cuts[i]; k++ {
+			s = Hash256(s[:])
+			if leg, ok = commits[commit(s)]; ok {
+				if compare(leg, tag) > 0 {
+					return fmt.Errorf("older spend on leg %d", i)
+				}
 			}
-			segments_transaction_trickle(make(map[[32]byte]struct{}), source)
 		}
 	}
-	segments_merkle_mutex.Unlock()
-	segments_transaction_mutex.Unlock()
-	commits_mutex.RUnlock()
 
-	return txid, nil
+	//create the balance edge then propagate
+	balance_redirect(tx.Source, tx.Destination)
+	fmt.Println("tx activated")
+	return nil
 }
 
-func hash_seq_next(h *[32]byte) {
-	//treat h as a big 256bit integer and increment it
-	for i := range *h {
-		if (*h)[i] != 255 {
-			(*h)[i]++
-			break
-		}
-		(*h)[i] = 0
+func (tx Transaction) triggers() (t [][32]byte) {
+	for _, s := range tx.Signature {
+		t = append(t, commit(s))
 	}
+	return t
 }
 
-func txlegs_store_leg(leg [32]byte, totx [32]byte) bool {
-	//attempt to store (leg -> totx) in segments_transaction_target
-	//if the leg is already mapped then increment leg until it finds free spot (return true),
-	//or finds a spot thats already mapped to totx (return false)
-
-	//the other store functions in this file work the same way
-
-	var iter = leg
-	for {
-		hash_seq_next(&iter)
-
-		var maybetx, ok = segments_transaction_target[iter]
-
-		if !ok {
-			segments_transaction_target[iter] = totx
-			return true
-		}
-		if ok && maybetx == totx {
-			return false
+func tx_recover(tx Transaction) error {
+	var id [32]byte = tx.ID()
+	cuts := cut(id[:])
+	for i := range tx.Signature {
+		for x := uint16(0); x < cuts[i]; x++ {
+			tx.Signature[i] = Hash256(tx.Signature[i][:])
 		}
 	}
+
+	var source [32]byte = Hash256Concat32(tx.Signature[:])
+
+	if source != tx.Source {
+		return fmt.Errorf("invalid signature")
+	}
+
+	return nil
 }
 
-func txlegs_each_leg_target(leg [32]byte, eacher func(*[32]byte) bool) {
-	//execute eacher on all the entries including and after leg in segments_transaction_target
-	//terminates if eacher return false or there are no more entries
-	//essentially executes eather on every txid that leg has been mapped to (every double spend + valid spend)
-
-	//other target functions in this file work the same way
-
-	var iter = leg
-
-	for {
-		hash_seq_next(&iter)
-		var maybetx, ok = segments_transaction_target[iter]
-
-		if !ok {
-			return
-		}
-
-		if !eacher(&maybetx) {
-			return
-		}
-	}
-}
-
-func txdoublespends_store_doublespend(source [32]byte, to [2][32]byte) bool {
-	var iter = source
-
-	for {
-		hash_seq_next(&iter)
-
-		var maybetx, ok = segments_transaction_doublespends[iter]
-
-		if !ok {
-			segments_transaction_doublespends[iter] = to
-			return true
-		}
-		if ok && maybetx == to {
-			return false
-		}
-	}
-}
-
-func txdoublespends_each_doublespend_target(source [32]byte, eacher func(*[2][32]byte) bool) {
-	var iter = source
-
-	for {
-		hash_seq_next(&iter)
-		var maybetx, ok = segments_transaction_doublespends[iter]
-
-		if !ok {
-			return
-		}
-
-		if !eacher(&maybetx) {
-			return
-		}
-	}
-}
-
-func merkledata_store_segments_merkle_target(source [32]byte, to [32]byte) bool {
-	var iter = source
-
-	for {
-		hash_seq_next(&iter)
-
-		var maybedata, ok = segments_merkle_target[iter]
-
-		if !ok {
-			segments_merkle_target[iter] = to
-			return true
-		}
-		if ok && maybedata == to {
-			return false
-		}
-	}
-}
-
-func tx_scan_leg_activity(tx [32]byte) (activity uint32) {
-
-	var data, ok1 = segments_transaction_data[tx]
-	if !ok1 {
-		return 0
-	}
-
-	var tags [21]UTXOtag
-	var iterations [21]uint16
-	var input [21][32]byte
-	for i := 0; i < 21; i++ {
-		input[i] = data[i]
-		var roottag, ok2 = commits[commit(data[i][0:])]
-
-		if !ok2 {
-			iterations[i] = 0
+func tx_sign(tx *Transaction) error {
+	if c, ok := constructs[tx.Source]; ok {
+		if k, ok := c.(Key); ok {
+			if !k.Active() {
+				tx.Signature = key_sign(&k, tx.ID())
+			} else {
+				return fmt.Errorf("source already spent (%X)", tx.Source)
+			}
 		} else {
-			iterations[i] = 65535
-			tags[i] = roottag
+			return fmt.Errorf("source is not a key (%X)", tx.Source)
 		}
+	} else {
+		return fmt.Errorf("source is not loaded (%X)", tx.Source)
 	}
-
-	var activities = hash_chains_compare(input, iterations, tags)
-
-	for i := 0; i < 21; i++ {
-		if activities[i] {
-			activity |= 1 << uint(i)
-		}
-	}
-	return activity
+	return nil
 }

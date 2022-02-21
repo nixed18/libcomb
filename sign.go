@@ -90,34 +90,10 @@ func combination(m *[BIG]uint32) (result [CHAINS]uint16) {
 	return result
 }
 
-func CutCombWhere(m []byte) [CHAINS]uint16 {
+func cut(m []byte) [CHAINS]uint16 {
 	var x [BIG]uint32
 	for i := 0; i < 32; i++ {
 		x[i/4] |= uint32(m[i]) << uint(8*(i&3))
 	}
 	return combination(&x)
-}
-
-func main_triangle() {
-	var pascal_row [CHAINS][BIG]uint32
-	var pascal_row2 [CHAINS][BIG]uint32
-	pascal_row[0][0] = 1
-	pascal_row[1][0] = 2
-	pascal_row[2][0] = 1
-	pascal_row2[0][0] = 1
-	for j := 0; j < 59231; j++ {
-		for i := 0; i < 20; i++ {
-			add(&pascal_row[i], &pascal_row[i+1], &pascal_row2[i+1], 0)
-		}
-		pascal_row = pascal_row2
-	}
-
-	for i := range pascal_row {
-		print("{")
-		for j := range pascal_row[i] {
-			print(pascal_row[i][j])
-			print(",")
-		}
-		println("},")
-	}
 }
