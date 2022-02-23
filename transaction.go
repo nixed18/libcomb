@@ -22,29 +22,31 @@ func (tx Transaction) Active() bool {
 }
 
 func (tx Transaction) trigger() (err error) {
-	var ok bool
 	if tx.Active() {
 		return //already triggered
 	}
-	var tag Tag
-	var leg Tag
 	var id [32]byte = tx.ID()
 	var cuts = cut(id[:])
+
+	var signature_commits [21][32]byte
 	for i, s := range tx.Signature {
+		signature_commits[i] = commit(s)
+	}
 
-		//check signature is committed
-		if tag, ok = commits[commit(s)]; !ok {
-			return fmt.Errorf("signature %d not committed", i)
-		}
+	//check signature is committed
+	if missing, ok := query_commits_exist(signature_commits[:]); !ok {
+		return fmt.Errorf("missing %d signature commits", len(missing))
+	}
 
-		//check leg for older signatures
+	//check for double spends
+	for i, s := range tx.Signature {
+		var leg_commits [][32]byte = make([][32]byte, 0)
 		for k := uint16(0); k < cuts[i]; k++ {
 			s = Hash256(s[:])
-			if leg, ok = commits[commit(s)]; ok {
-				if leg.OlderThan(tag) {
-					return fmt.Errorf("older spend on leg %d", i)
-				}
-			}
+			leg_commits = append(leg_commits, commit(s))
+		}
+		if query_commits_any_older_than(leg_commits, signature_commits[i]) {
+			return fmt.Errorf("older signature on leg %d", i)
 		}
 	}
 

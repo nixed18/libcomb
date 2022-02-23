@@ -62,24 +62,29 @@ func (m MerkleSegment) Active() bool {
 }
 
 func (m MerkleSegment) trigger() (err error) {
-	var ok bool
-	var tag Tag
-	var leg Tag
-	for i := range m.Signature {
-		//check signature is committed
-		if tag, ok = commits[commit(m.Signature[i])]; !ok {
-			return fmt.Errorf("signature %d not committed", i)
-		}
+	if m.Active() {
+		return
+	}
 
-		//check leg for older signatures
+	var signature_commits [2][32]byte
+	signature_commits[0] = commit(m.Signature[0])
+	signature_commits[1] = commit(m.Signature[1])
+
+	//check signature is committed
+	if missing, ok := query_commits_exist(signature_commits[:]); !ok {
+		return fmt.Errorf("missing %d signature commits", len(missing))
+	}
+
+	//check leg for older signatures
+	for i := range m.Signature {
+		var leg_commits [][32]byte = make([][32]byte, 0)
 		var hash = m.Signature[i]
 		for hash != m.Tips[i] {
 			hash = Hash256(hash[:])
-			if leg, ok = commits[commit(hash)]; ok {
-				if leg.OlderThan(tag) {
-					return fmt.Errorf("older decision on leg %d", i)
-				}
-			}
+			leg_commits = append(leg_commits, commit(hash))
+		}
+		if query_commits_any_older_than(leg_commits, signature_commits[i]) {
+			return fmt.Errorf("older signature on leg %d", i)
 		}
 	}
 
