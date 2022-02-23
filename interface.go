@@ -18,11 +18,11 @@ type Tag struct {
 	Order  uint32
 }
 
-func compare(a, b Tag) int64 {
+func (a Tag) OlderThan(b Tag) bool {
 	if a.Height != b.Height {
-		return int64(a.Height - b.Height)
+		return a.Height < b.Height
 	}
-	return int64(a.Order - b.Order)
+	return a.Order < b.Order
 }
 
 func Commit(address [32]byte) [32]byte {

@@ -76,7 +76,7 @@ func (m MerkleSegment) trigger() (err error) {
 		for hash != m.Tips[i] {
 			hash = Hash256(hash[:])
 			if leg, ok = commits[commit(hash)]; ok {
-				if compare(leg, tag) > 0 {
+				if leg.OlderThan(tag) {
 					return fmt.Errorf("older decision on leg %d", i)
 				}
 			}

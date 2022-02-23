@@ -15,7 +15,7 @@ func (tx Transaction) ID() [32]byte {
 }
 
 func (tx Transaction) Active() bool {
-	if _, ok := balance_edge[tx.Source]; ok {
+	if destination, ok := balance_edge[tx.Source]; ok && destination == tx.Destination {
 		return true
 	}
 	return false
@@ -23,7 +23,7 @@ func (tx Transaction) Active() bool {
 
 func (tx Transaction) trigger() (err error) {
 	var ok bool
-	if _, ok = balance_edge[tx.Source]; ok {
+	if tx.Active() {
 		return //already triggered
 	}
 	var tag Tag
@@ -41,7 +41,7 @@ func (tx Transaction) trigger() (err error) {
 		for k := uint16(0); k < cuts[i]; k++ {
 			s = Hash256(s[:])
 			if leg, ok = commits[commit(s)]; ok {
-				if compare(leg, tag) > 0 {
+				if leg.OlderThan(tag) {
 					return fmt.Errorf("older spend on leg %d", i)
 				}
 			}
