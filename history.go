@@ -1,18 +1,14 @@
 package libcomb
 
-import "fmt"
-
 func get_parents(address [32]byte) [][32]byte {
 	var parents [][32]byte = make([][32]byte, 0)
 	for s, d := range balance_edge {
 		if d == address {
-			fmt.Printf("here\n")
 			parents = append(parents, s)
 		}
 	}
 	for s, d := range balance_one_off {
 		if d == address {
-			fmt.Printf("here2\n")
 			parents = append(parents, s)
 		}
 	}
