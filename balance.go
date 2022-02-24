@@ -7,12 +7,14 @@ import (
 var balance map[[32]byte]uint64
 var balance_edge map[[32]byte][32]byte    //source -> destination
 var balance_one_off map[[32]byte][32]byte //source -> destination
+var balance_coinbases map[[32]byte]uint64 //commit -> reward
 var balance_guard sync.RWMutex
 
 func balance_initialize() {
 	balance = make(map[[32]byte]uint64)
 	balance_edge = make(map[[32]byte][32]byte)
 	balance_one_off = make(map[[32]byte][32]byte)
+	balance_coinbases = make(map[[32]byte]uint64)
 }
 
 func balance_propagate(address [32]byte) {

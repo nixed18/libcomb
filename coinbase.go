@@ -1,18 +1,25 @@
 package libcomb
 
-func coinbase_give_reward(c [32]byte, t Tag) {
-	balance[c] += coinbase_reward(t.Height)
-	coinbase_check_commit(c)
+import "log"
+
+func coinbase_give_reward(c [32]byte, reward uint64) {
+	if _, ok := balance_coinbases[c]; ok {
+		log.Printf("already rewarded")
+		return //already awarded
+	}
+	balance_coinbases[c] = reward
+	balance[c] += reward
 }
 
 func coinbase_check_commit(c [32]byte) {
-	//if an address is mapped to c (commit(a) == c), then redirect funds to a
-
-	//check if c is a coinbase
-	if tag, ok := commits[c]; !ok || tag.Order != 0 {
+	//award coinbase if we havent already
+	var reward uint64
+	if reward = query_get_coinbase(c); reward == 0 {
 		return //not a coinbase
 	}
-	//check if c is a committed address
+	coinbase_give_reward(c, reward)
+
+	//now propagate the coinbase if its a construct
 	if a, ok := construct_uncommits[c]; ok {
 		//redirect funds to the address
 		balance_redirect(c, a)
@@ -20,11 +27,16 @@ func coinbase_check_commit(c [32]byte) {
 }
 
 func coinbase_check_address(a [32]byte) {
-	//if a coinbase exists on commit(a) then redirect funds to a
 	var c [32]byte = commit(a)
-	if tag, ok := commits[c]; !ok || tag.Order != 0 {
+
+	//award coinbase if we havent already
+	var reward uint64
+	if reward = query_get_coinbase(c); reward == 0 {
 		return //not a coinbase
 	}
+	coinbase_give_reward(c, reward)
+
+	//now propagate the coinbase to the construct
 	balance_redirect(c, a)
 }
 
