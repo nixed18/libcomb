@@ -53,6 +53,18 @@ func GetCommits() map[[32]byte]Tag {
 	return out
 }
 
+func GetBlockCommits(h uint64) map[[32]byte]Tag {
+	out := make(map[[32]byte]Tag)
+	commits_guard.RLock()
+	defer commits_guard.RUnlock()
+	for key, val := range commits {
+		if val.Height == h {
+			out[key] = val
+		}
+	}
+	return out
+}
+
 func GetLock() {
 	commits_guard.Lock()
 	balance_guard.Lock()
