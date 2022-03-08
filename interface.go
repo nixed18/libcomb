@@ -43,6 +43,16 @@ func GetCommitCount() uint64 {
 	return uint64(len(commits))
 }
 
+func GetCommits() map[[32]byte]Tag {
+	out := make(map[[32]byte]Tag)
+	commits_guard.RLock()
+	defer commits_guard.RUnlock()
+	for key, val := range commits {
+		out[key] = val
+	}
+	return out
+}
+
 func GetLock() {
 	commits_guard.Lock()
 	balance_guard.Lock()
